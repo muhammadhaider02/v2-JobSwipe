@@ -1,0 +1,8 @@
+flask
+pdfminer.six
+python-docx
+transformers
+torch
+requests
+sentence_transformers
+chromadb
