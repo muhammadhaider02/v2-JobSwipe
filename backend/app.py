@@ -3,6 +3,8 @@ from flask_cors import CORS, cross_origin
 import os
 import re
 import json
+import uuid
+import threading
 from pdfminer.high_level import extract_text
 from docx import Document
 from transformers import AutoTokenizer, AutoModelForTokenClassification, pipeline
@@ -26,10 +28,14 @@ app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 25 * 1024 * 1024  # 25MB upload cap
 CORS(app, resources={
     "/upload": {"origins": "http://localhost:3000"},
+    "/get-llm-results/*": {"origins": "http://localhost:3000"},
     "/recommend-roles": {"origins": "http://localhost:3000"}
 }, supports_credentials=False)
 UPLOAD_FOLDER = 'uploads'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+# In-memory storage for LLM processing jobs
+llm_jobs = {}  # {job_id: {'status': 'processing'|'completed'|'failed', 'result': {...}, 'error': str}}
 
 # Load model once at startup
 tokenizer = AutoTokenizer.from_pretrained("yashpwr/resume-ner-bert-v2")
@@ -66,11 +72,13 @@ def extract_text_from_file(path):
 
 def extract_contact_info(text):
     """
-    Extract contact information (email and phone) from resume text
+    Extract contact information (email, phone, LinkedIn, GitHub) from resume text
     """
     contact_info = {
         'email': None,
-        'phone': None
+        'phone': None,
+        'linkedin': None,
+        'github': None
     }
     
     # Extract email
@@ -86,6 +94,43 @@ def extract_contact_info(text):
     valid_phones = [p for p in phones if len(re.sub(r'[^\d]', '', p)) >= 10]
     if valid_phones:
         contact_info['phone'] = valid_phones[0].strip()
+    
+    # Extract LinkedIn URL (various formats)
+    # Handles: linkedin.com/in/username, www.linkedin.com/in/username, http(s)://linkedin.com/in/username
+    linkedin_patterns = [
+        r'(?:https?://)?(?:www\.)?linkedin\.com/in/[\w\-]+/?',
+        r'(?:https?://)?(?:[a-z]{2,3}\.)?linkedin\.com/in/[\w\-]+/?',
+        r'linkedin\.com/in/[\w\-]+/?'
+    ]
+    
+    for pattern in linkedin_patterns:
+        matches = re.findall(pattern, text, re.IGNORECASE)
+        if matches:
+            url = matches[0].rstrip('/')
+            # Ensure it starts with https://
+            if not url.startswith('http'):
+                url = 'https://' + url
+            contact_info['linkedin'] = url
+            break
+    
+    # Extract GitHub URL (various formats)
+    # Handles: github.com/username, www.github.com/username, http(s)://github.com/username
+    github_patterns = [
+        r'(?:https?://)?(?:www\.)?github\.com/[\w\-]+/?',
+        r'github\.com/[\w\-]+/?'
+    ]
+    
+    for pattern in github_patterns:
+        matches = re.findall(pattern, text, re.IGNORECASE)
+        if matches:
+            url = matches[0].rstrip('/')
+            # Ensure it starts with https://
+            if not url.startswith('http'):
+                url = 'https://' + url
+            # Filter out common false positives (like github.com/repos, github.com/issues)
+            if not re.search(r'github\.com/(repos|issues|pulls|stars|notifications|settings)', url, re.IGNORECASE):
+                contact_info['github'] = url
+                break
     
     return contact_info
 
@@ -202,12 +247,14 @@ def upload_resume():
     except Exception as ex:
         return jsonify({'error': f'Upload handling failed: {ex}'}), 400
 
-    # Step 2: Extract contact information
+    # Step 2: Extract contact information (including LinkedIn and GitHub)
     contact_info = extract_contact_info(text)
     
     print("\n==== Contact Information ====")
     print(f"Email: {contact_info['email']}")
     print(f"Phone: {contact_info['phone']}")
+    print(f"LinkedIn: {contact_info['linkedin']}")
+    print(f"GitHub: {contact_info['github']}")
 
     # Step 3: Split resume into sections
     sections = split_resume_into_sections(text)
@@ -215,15 +262,14 @@ def upload_resume():
     # Print sections to terminal for debugging
     print_sections(sections)
 
-    # Step 4: Process each section separately with NER
-    # Model is trained for: Profile/Summary, Experience, Education, Skills
-    sections_to_process = ['Profile', 'Education', 'Experience', 'Skills']
+    # Step 4: Process Profile and Skills sections with NER (fast sections only)
+    sections_to_process_now = ['Profile', 'Skills']
     
     section_entities = {}
     
-    print("\n==== Processing Sections with Enhanced NER Pipeline ====")
+    print("\n==== Processing Fast Sections with Enhanced NER Pipeline ====")
     
-    for section_name in sections_to_process:
+    for section_name in sections_to_process_now:
         section_text = sections.get(section_name, '')
         
         print(f"\n{'='*60}")
@@ -246,112 +292,135 @@ def upload_resume():
         else:
             section_entities[section_name] = []
             print("  (Empty section)")
-    
-    # Keep Projects section but don't process with NER
-    section_entities['Projects'] = []
 
-    # Step 5: Build base JSON response with sections, entities, and contact info
-    # Exclude Projects and Skills from the 'sections' field in the response JSON
-    sections_for_response = {k: v for k, v in sections.items() if k not in ('Projects', 'Skills')}
-    response = {
-        'contact_info': contact_info,
-        'sections': sections_for_response,
-        'entities_by_section': section_entities
-    }
-
-    # Parse projects/skills via regex helpers for convenience viewing
+    # Parse projects/skills via regex helpers
     try:
         from utils.section_splitter import parse_projects_from_text, parse_skills_from_text
-        response['parsed_projects'] = parse_projects_from_text(sections.get('Projects', ''))
-        response['parsed_skills'] = parse_skills_from_text(sections.get('Skills', ''))
+        parsed_projects = parse_projects_from_text(sections.get('Projects', ''))
+        parsed_skills = parse_skills_from_text(sections.get('Skills', ''))
     except Exception as e:
-        response['parsing_helpers_error'] = str(e)
+        parsed_projects = []
+        parsed_skills = []
+        print(f"Error parsing projects/skills: {e}")
 
-    # Step 6: Run LLM-based refinement (Stage 2) if backend is available
-    try:
-        # Send ONLY Education and Experience sections to the LLM
-        # Profile/Summary, Email, Phone will be handled by Python NLP
-        ordered_for_llm = ['Education', 'Experience']
-        resume_text_for_llm = "\n\n".join([
-            f"{name}:\n{sections.get(name, '')}" for name in ordered_for_llm if sections.get(name, '')
-        ])
+    # Extract profile/summary from NLP
+    profile_entities = section_entities.get('Profile', [])
+    summary_text = ''
+    for entity in profile_entities:
+        if entity['entity'] in ['Profile', 'Summary', 'PROFILE']:
+            summary_text = entity.get('text', '')
+            break
+    
+    # If no summary from entities, try to extract first few sentences from Profile section
+    if not summary_text and sections.get('Profile'):
+        profile_text = sections['Profile'].strip()
+        sentences = re.split(r'[.!?]\s+', profile_text)
+        summary_text = '. '.join(sentences[:2]) + '.' if sentences else profile_text[:200]
 
-        backend = os.getenv('LLAMA_BACKEND', 'ollama')
-        model_name = os.getenv('LLAMA_MODEL', 'llama3:latest')
-        base_url = os.getenv('LLAMA_BASE_URL', 'http://localhost:11434')
+    # Build immediate response with NLP-extracted data (contact, profile, skills, projects)
+    immediate_response = {
+        'contact_info': {
+            'name': '',  # Can be extracted from first line of resume
+            'email': contact_info.get('email', ''),
+            'phone': contact_info.get('phone', '')
+        },
+        'profile': {
+            'summary': summary_text,
+            'github': contact_info.get('github', ''),
+            'linkedin': contact_info.get('linkedin', '')
+        },
+        'skills': parsed_skills,
+        'projects': parsed_projects
+    }
 
-        # Debug: show resolved backend configuration & input text
-        print("\n==== LLM CONFIG ====", flush=True)
-        print(f"backend={backend}", flush=True)
-        print(f"model={model_name}", flush=True)
-        print(f"base_url={base_url}", flush=True)
-        print("\n==== LLM INPUT: Resume text (Education/Experience ONLY) ====", flush=True)
-        print(resume_text_for_llm or "(empty)", flush=True)
+    # Generate job ID for LLM processing
+    job_id = str(uuid.uuid4())
+    
+    # Initialize job status
+    llm_jobs[job_id] = {
+        'status': 'processing',
+        'result': None,
+        'error': None
+    }
 
-        # Call LLM with ONLY the raw text, no NER hints
-        refined = refine_resume(
-            resume_text=resume_text_for_llm,
-            ner_output=None,  # Don't pass NER output to LLM
-            backend=backend,
-            model=model_name,
-            base_url=base_url,
-            temperature=0.1,
-            max_new_tokens=1200,
-            request_timeout_s=300.0,
-        )
-        
-        # Merge Python NLP extractions with LLM output
-        if isinstance(refined, dict):
-            # Add contact info (from Python regex)
-            refined['contact_info'] = {
-                'name': '',  # Can extract from Profile entities if needed
-                'email': contact_info.get('email', ''),
-                'phone': contact_info.get('phone', '')
-            }
+    # Start LLM processing in background thread
+    def process_llm_in_background():
+        try:
+            print(f"\n==== Starting LLM Background Processing for job {job_id} ====", flush=True)
             
-            # Add profile/summary (from Python NLP)
-            profile_entities = section_entities.get('Profile', [])
-            summary_text = ''
-            for entity in profile_entities:
-                if entity['entity'] in ['Profile', 'Summary', 'PROFILE']:
-                    summary_text = entity.get('text', '')
-                    break
+            # Process Education and Experience sections (slow sections)
+            ordered_for_llm = ['Education', 'Experience']
+            resume_text_for_llm = "\n\n".join([
+                f"{name}:\n{sections.get(name, '')}" for name in ordered_for_llm if sections.get(name, '')
+            ])
+
+            backend = os.getenv('LLAMA_BACKEND', 'ollama')
+            model_name = os.getenv('LLAMA_MODEL', 'llama3:latest')
+            base_url = os.getenv('LLAMA_BASE_URL', 'http://localhost:11434')
+
+            print("\n==== LLM CONFIG ====", flush=True)
+            print(f"backend={backend}", flush=True)
+            print(f"model={model_name}", flush=True)
+            print(f"base_url={base_url}", flush=True)
+            print("\n==== LLM INPUT: Resume text (Education/Experience ONLY) ====", flush=True)
+            print(resume_text_for_llm or "(empty)", flush=True)
+
+            # Call LLM
+            refined = refine_resume(
+                resume_text=resume_text_for_llm,
+                ner_output=None,
+                backend=backend,
+                model=model_name,
+                base_url=base_url,
+                temperature=0.1,
+                max_new_tokens=1200,
+                request_timeout_s=300.0,
+            )
             
-            # If no summary from entities, try to extract first few sentences from Profile section
-            if not summary_text and sections.get('Profile'):
-                # Get first 2-3 sentences as summary
-                profile_text = sections['Profile'].strip()
-                sentences = re.split(r'[.!?]\s+', profile_text)
-                summary_text = '. '.join(sentences[:2]) + '.' if sentences else profile_text[:200]
+            # Update job status
+            llm_jobs[job_id]['status'] = 'completed'
+            llm_jobs[job_id]['result'] = refined
             
-            refined['profile'] = {
-                'summary': summary_text,
-                'github': '',  # Can extract from Profile section if needed
-                'linkedin': ''  # Can extract from Profile section if needed
-            }
+            print(f"\n==== LLM Background Processing COMPLETED for job {job_id} ====", flush=True)
             
-            # Extract LinkedIn and GitHub from Profile section if present
-            if sections.get('Profile'):
-                profile_text = sections['Profile']
-                linkedin_match = re.search(r'linkedin\.com/in/[\w-]+', profile_text, re.IGNORECASE)
-                github_match = re.search(r'github\.com/[\w-]+', profile_text, re.IGNORECASE)
-                if linkedin_match:
-                    refined['profile']['linkedin'] = 'https://' + linkedin_match.group(0)
-                if github_match:
-                    refined['profile']['github'] = 'https://' + github_match.group(0)
-            
-            # Add parsed skills/projects (from Python regex)
-            parsed_skills = response.get('parsed_skills', [])
-            parsed_projects = response.get('parsed_projects', [])
-            if parsed_skills:
-                refined['skills'] = parsed_skills
-            if parsed_projects:
-                refined['projects'] = parsed_projects
-                
-        response['refined'] = refined
-    except Exception as e:
-        # Non-fatal: return base response and surface error for visibility
-        response['refinement_error'] = str(e)
+        except Exception as e:
+            print(f"\n==== LLM Background Processing FAILED for job {job_id}: {e} ====", flush=True)
+            llm_jobs[job_id]['status'] = 'failed'
+            llm_jobs[job_id]['error'] = str(e)
+
+    # Start background thread
+    thread = threading.Thread(target=process_llm_in_background, daemon=True)
+    thread.start()
+
+    # Return immediate response with job_id
+    return jsonify({
+        'job_id': job_id,
+        **immediate_response
+    })
+
+@app.route('/get-llm-results/<job_id>', methods=['GET', 'OPTIONS'])
+@cross_origin(origins="http://localhost:3000", methods=["GET", "OPTIONS"], allow_headers=["Content-Type"], max_age=86400)
+def get_llm_results(job_id):
+    """
+    Poll endpoint to check if LLM processing is complete
+    Returns: { 'status': 'processing'|'completed'|'failed', 'result': {...} or 'error': '...' }
+    """
+    if request.method == 'OPTIONS':
+        return ('', 204)
+    
+    if job_id not in llm_jobs:
+        return jsonify({'status': 'not_found', 'error': 'Job ID not found'}), 404
+    
+    job = llm_jobs[job_id]
+    
+    response = {
+        'status': job['status']
+    }
+    
+    if job['status'] == 'completed':
+        response['result'] = job['result']
+    elif job['status'] == 'failed':
+        response['error'] = job['error']
     
     return jsonify(response)
 

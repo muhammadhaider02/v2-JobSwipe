@@ -54,11 +54,11 @@ type FormState = {
 
 const steps = [
   { id: 1, label: "Profile" },
-  { id: 2, label: "Education" },
-  { id: 3, label: "Experience" },
-  { id: 4, label: "Projects" },
-  { id: 5, label: "Skills" },
-  { id: 6, label: "Certificates" },
+  { id: 2, label: "Projects" },
+  { id: 3, label: "Skills" },
+  { id: 4, label: "Certificates" },
+  { id: 5, label: "Education" },
+  { id: 6, label: "Experience" },
 ];
 
 export default function MultiStepResumeForm() {
@@ -162,13 +162,13 @@ export default function MultiStepResumeForm() {
     if (stepIndex === 0) {
       if (!form.profile.name.trim()) errs.name = "Name is required";
       if (!form.profile.email.trim()) errs.email = "Email is required";
-    } else if (stepIndex === 1) {
+    } else if (stepIndex === 4) {
       if (form.education.length === 0 || !form.education[0].degree.trim()) errs.degree = "At least one degree is required";
       if (form.education.length === 0 || !form.education[0].institution.trim()) errs.institution = "Institution is required";
-    } else if (stepIndex === 2) {
+    } else if (stepIndex === 5) {
       if (form.experience.length === 0 || !form.experience[0].company.trim()) errs.company = "At least one company is required";
       if (form.experience.length === 0 || !form.experience[0].role.trim()) errs.role = "Role is required";
-    } else if (stepIndex === 4) {
+    } else if (stepIndex === 2) {
       if (form.skills.length === 0) errs.skills = "Add at least one skill";
     }
     return errs;
@@ -358,7 +358,7 @@ export default function MultiStepResumeForm() {
             </div>
           )}
 
-          {currentStep === 1 && (
+          {currentStep === 4 && (
             <div className="space-y-6">
               {form.education.map((edu, index) => (
                 <div key={index} className="border rounded-lg p-4 relative">
@@ -430,7 +430,7 @@ export default function MultiStepResumeForm() {
             </div>
           )}
 
-          {currentStep === 2 && (
+          {currentStep === 5 && (
             <div className="space-y-6">
               {form.experience.map((exp, index) => (
                 <div key={index} className="border rounded-lg p-4 relative">
@@ -494,7 +494,49 @@ export default function MultiStepResumeForm() {
             </div>
           )}
 
+          {currentStep === 2 && (
+            <div>
+              <label className="text-sm font-medium">Skills</label>
+              <input
+                className="mt-1 w-full border rounded-md px-3 py-2"
+                placeholder="Type a skill and press Enter or ,"
+                onKeyDown={onSkillsInputKeyDown}
+              />
+              {errors.skills && <p className="text-xs text-red-600 mt-1">{errors.skills}</p>}
+              <div className="mt-3 flex flex-wrap gap-2">
+                {form.skills.map((skill) => (
+                  <span key={skill} className="px-2 py-1 bg-primary/10 text-primary rounded-full text-xs flex items-center gap-2">
+                    {skill}
+                    <button type="button" onClick={() => removeSkill(skill)} className="text-primary/70 hover:text-primary">×</button>
+                  </span>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">You can also paste comma-separated skills.</p>
+            </div>
+          )}
+
           {currentStep === 3 && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="text-sm font-medium">Certificate Name</label>
+                <input className="mt-1 w-full border rounded-md px-3 py-2" value={form.certificates.name} onChange={handleInput("certificates", "name")} />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Issuer</label>
+                <input className="mt-1 w-full border rounded-md px-3 py-2" value={form.certificates.issuer} onChange={handleInput("certificates", "issuer")} />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Issue Date</label>
+                <input type="date" className="mt-1 w-full border rounded-md px-3 py-2" value={form.certificates.issueDate} onChange={handleInput("certificates", "issueDate")} />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Expiry Date (optional)</label>
+                <input type="date" className="mt-1 w-full border rounded-md px-3 py-2" value={form.certificates.expiryDate} onChange={handleInput("certificates", "expiryDate")} />
+              </div>
+            </div>
+          )}
+
+          {currentStep === 1 && (
             <div className="space-y-6">
               {form.projects.map((proj, index) => (
                 <div key={index} className="border rounded-lg p-4 relative">
@@ -547,48 +589,6 @@ export default function MultiStepResumeForm() {
               </button>
             </div>
           )}
-
-          {currentStep === 4 && (
-            <div>
-              <label className="text-sm font-medium">Skills</label>
-              <input
-                className="mt-1 w-full border rounded-md px-3 py-2"
-                placeholder="Type a skill and press Enter or ,"
-                onKeyDown={onSkillsInputKeyDown}
-              />
-              {errors.skills && <p className="text-xs text-red-600 mt-1">{errors.skills}</p>}
-              <div className="mt-3 flex flex-wrap gap-2">
-                {form.skills.map((skill) => (
-                  <span key={skill} className="px-2 py-1 bg-primary/10 text-primary rounded-full text-xs flex items-center gap-2">
-                    {skill}
-                    <button type="button" onClick={() => removeSkill(skill)} className="text-primary/70 hover:text-primary">×</button>
-                  </span>
-                ))}
-              </div>
-              <p className="text-xs text-muted-foreground mt-2">You can also paste comma-separated skills.</p>
-            </div>
-          )}
-
-          {currentStep === 5 && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="text-sm font-medium">Certificate Name</label>
-                <input className="mt-1 w-full border rounded-md px-3 py-2" value={form.certificates.name} onChange={handleInput("certificates", "name")} />
-              </div>
-              <div>
-                <label className="text-sm font-medium">Issuer</label>
-                <input className="mt-1 w-full border rounded-md px-3 py-2" value={form.certificates.issuer} onChange={handleInput("certificates", "issuer")} />
-              </div>
-              <div>
-                <label className="text-sm font-medium">Issue Date</label>
-                <input type="date" className="mt-1 w-full border rounded-md px-3 py-2" value={form.certificates.issueDate} onChange={handleInput("certificates", "issueDate")} />
-              </div>
-              <div>
-                <label className="text-sm font-medium">Expiry Date (optional)</label>
-                <input type="date" className="mt-1 w-full border rounded-md px-3 py-2" value={form.certificates.expiryDate} onChange={handleInput("certificates", "expiryDate")} />
-              </div>
-            </div>
-          )}
         </div>
 
         <div className="mt-6 flex items-center justify-between">
@@ -596,7 +596,7 @@ export default function MultiStepResumeForm() {
             Previous
           </button>
           <div className="flex-1" />
-          {currentStep < steps.length - 1 ? (
+          {currentStep < steps.length - 1 ? ( 
             <button className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:opacity-90" onClick={onNext}>
               Next
             </button>
@@ -683,12 +683,77 @@ function ResumeAutofillButton({ onAutofill }: { onAutofill: (data: BackendJson) 
   const fileRef = useRef<HTMLInputElement | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [llmStatus, setLlmStatus] = useState<'idle' | 'polling' | 'completed' | 'failed'>('idle');
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const jobIdRef = useRef<string | null>(null);
+
+  // Cleanup polling on unmount
+  useEffect(() => {
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+      }
+    };
+  }, []);
+
+  async function pollLLMResults(jobId: string) {
+    const base = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5000';
+    
+    const poll = async () => {
+      try {
+        const res = await fetch(`${base}/get-llm-results/${jobId}`);
+        if (!res.ok) {
+          if (res.status === 404) {
+            setLlmStatus('failed');
+            setError('Job not found');
+            if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
+            return;
+          }
+          throw new Error(`Failed to poll: ${res.status}`);
+        }
+        
+        const data = await res.json();
+        
+        if (data.status === 'completed') {
+          setLlmStatus('completed');
+          if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
+          
+          // Merge LLM results (education & experience) with existing autofill data
+          if (data.result) {
+            onAutofill(data.result);
+          }
+        } else if (data.status === 'failed') {
+          setLlmStatus('failed');
+          setError(data.error || 'LLM processing failed');
+          if (pollingIntervalRef.current) clearInterval(pollingIntervalRef.current);
+        }
+        // If status is 'processing', continue polling
+      } catch (err: any) {
+        console.error('Polling error:', err);
+        // Don't stop polling on network errors, just log
+      }
+    };
+    
+    // Start polling every 2 seconds
+    setLlmStatus('polling');
+    pollingIntervalRef.current = setInterval(poll, 2000);
+    
+    // Also poll immediately
+    poll();
+  }
 
   async function onPick(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];
     if (!f) return;
     setLoading(true);
     setError(null);
+    setLlmStatus('idle');
+    
+    // Clear any existing polling
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current);
+    }
+    
     try {
       const form = new FormData();
       form.append("file", f);
@@ -699,9 +764,15 @@ function ResumeAutofillButton({ onAutofill }: { onAutofill: (data: BackendJson) 
       });
       if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
       const json = await res.json();
-      // Prefer refined if available
-      const data: BackendJson = json.refined || json;
-      onAutofill(data);
+      
+      // Immediately autofill NLP-extracted data (contact, profile, skills, projects)
+      onAutofill(json);
+      
+      // Start polling for LLM results (education & experience)
+      if (json.job_id) {
+        jobIdRef.current = json.job_id;
+        pollLLMResults(json.job_id);
+      }
     } catch (err: any) {
       setError(err?.message || "Failed to autofill");
     } finally {
@@ -710,17 +781,33 @@ function ResumeAutofillButton({ onAutofill }: { onAutofill: (data: BackendJson) 
     }
   }
 
+  const getButtonText = () => {
+    if (loading) return "Uploading...";
+    if (llmStatus === 'polling') return "Processing Education & Experience...";
+    if (llmStatus === 'completed') return "✓ Autofill Complete";
+    if (llmStatus === 'failed') return "⚠ Autofill (partial)";
+    return "Autofill from Resume";
+  };
+
   return (
-    <div className="flex items-center gap-2">
-      <input ref={fileRef} type="file" accept=".pdf,.docx" className="hidden" onChange={onPick} />
-      <button
-        type="button"
-        onClick={() => fileRef.current?.click()}
-        className="inline-flex items-center gap-2 text-xs px-3 py-1.5 border rounded-md hover:bg-accent"
-        disabled={loading}
-      >
-        <Upload size={14} /> {loading ? "Uploading..." : "Autofill from Resume"}
-      </button>
+    <div className="flex flex-col items-center gap-2">
+      <div className="flex items-center gap-2">
+        <input ref={fileRef} type="file" accept=".pdf,.docx" className="hidden" onChange={onPick} />
+        <button
+          type="button"
+          onClick={() => fileRef.current?.click()}
+          className="inline-flex items-center gap-2 text-xs px-3 py-1.5 border rounded-md hover:bg-accent disabled:opacity-50"
+          disabled={loading || llmStatus === 'polling'}
+        >
+          <Upload size={14} /> {getButtonText()}
+        </button>
+      </div>
+      {llmStatus === 'polling' && (
+        <div className="text-xs text-muted-foreground flex items-center gap-2">
+          <span className="inline-block w-3 h-3 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+          LLM is processing Education & Experience in the background...
+        </div>
+      )}
       {error && <span className="text-xs text-red-600">{error}</span>}
     </div>
   );
