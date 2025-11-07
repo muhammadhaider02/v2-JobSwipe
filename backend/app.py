@@ -7,22 +7,14 @@ import uuid
 import threading
 from pdfminer.high_level import extract_text
 from docx import Document
-from transformers import AutoTokenizer, AutoModelForTokenClassification, pipeline
 from utils.section_splitter import (
     split_resume_into_sections, 
     print_sections,
-    preprocess_text_for_ner,
-    merge_subword_entities,
-    normalize_entity_labels,
-    extract_with_regex_fallback,
-    deduplicate_entities,
-    filter_low_confidence_entities,
-    postprocess_education_entities,
-    split_experience_into_jobs,
-    postprocess_experience_entities
+    parse_projects_from_text, 
+    parse_skills_from_text
 )
 from models.llama_refiner import refine_resume
-from models.query_roles import query_roles as get_role_recommendations
+from models.updated_query import suggest_roles as get_role_recommendations
 
 app = Flask(__name__)
 app.config['MAX_CONTENT_LENGTH'] = 25 * 1024 * 1024  # 25MB upload cap
@@ -36,11 +28,6 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 # In-memory storage for LLM processing jobs
 llm_jobs = {}  # {job_id: {'status': 'processing'|'completed'|'failed', 'result': {...}, 'error': str}}
-
-# Load model once at startup
-tokenizer = AutoTokenizer.from_pretrained("yashpwr/resume-ner-bert-v2")
-model = AutoModelForTokenClassification.from_pretrained("yashpwr/resume-ner-bert-v2")
-nlp = pipeline("ner", model=model, tokenizer=tokenizer, aggregation_strategy="simple")
 
 def extract_text_from_file(path):
     ext = os.path.splitext(path)[-1].lower()
@@ -134,86 +121,6 @@ def extract_contact_info(text):
     
     return contact_info
 
-def process_section_with_ner(section_text, section_name, confidence_threshold=0.5):
-    """
-    Process a section with NER model and apply all preprocessing/postprocessing
-    """
-    if not section_text or not section_text.strip():
-        return []
-    
-    # Optional: For Experience, split into job chunks and process per chunk
-    if section_name == 'Experience':
-        jobs = split_experience_into_jobs(section_text)
-        print(f"\n[DEBUG] Split Experience into {len(jobs)} job block(s)")
-        entities = []
-        for idx, job_text in enumerate(jobs, 1):
-            preprocessed_text = preprocess_text_for_ner(job_text, section_name)
-            if not preprocessed_text:
-                continue
-            print(f"\n[DEBUG] Preprocessed Experience job #{idx}:")
-            print(f"{preprocessed_text[:200]}..." if len(preprocessed_text) > 200 else preprocessed_text)
-            try:
-                # Token-length safeguard: truncate inputs >512 tokens (approx by chars)
-                safe_input = preprocessed_text
-                if len(preprocessed_text) > 4000:  # rough proxy; avoids tokenizer call here
-                    safe_input = preprocessed_text[:4000]
-                results = nlp(safe_input)
-                entities.extend([
-                    {"entity": r["entity_group"], "text": r["word"], "score": float(r["score"])}
-                    for r in results
-                ])
-            except Exception as e:
-                print(f"[ERROR] NER model failed for Experience job #{idx}: {e}")
-    else:
-        # Step 1: Preprocess text for NER
-        preprocessed_text = preprocess_text_for_ner(section_text, section_name)
-        if not preprocessed_text:
-            return []
-        print(f"\n[DEBUG] Preprocessed {section_name}:")
-        print(f"{preprocessed_text[:200]}..." if len(preprocessed_text) > 200 else preprocessed_text)
-        # Step 2: Run NER model
-        try:
-            results = nlp(preprocessed_text)
-            # Convert to our format
-            entities = [
-                {"entity": r["entity_group"], "text": r["word"], "score": float(r["score"])}
-                for r in results
-            ]
-        except Exception as e:
-            print(f"[ERROR] NER model failed for {section_name}: {e}")
-            entities = []
-    
-    # Step 3: Merge subword tokens
-    entities = merge_subword_entities(entities)
-    
-    # Step 4: Normalize entity labels based on context
-    entities = normalize_entity_labels(entities, section_name)
-    
-    # Step 5: Filter low confidence entities (use higher threshold for Experience)
-    threshold = confidence_threshold if section_name != 'Experience' else max(0.6, confidence_threshold)
-    entities = filter_low_confidence_entities(entities, threshold)
-    
-    # Step 6: Add regex-based fallback entities
-    fallback_entities = extract_with_regex_fallback(section_text, section_name)
-    entities.extend(fallback_entities)
-    
-    # Step 7: Deduplicate
-    entities = deduplicate_entities(entities)
-    
-    # Step 8: Section-specific postprocessing (e.g., split composite Education entities)
-    if section_name == 'Education':
-        # Use the preprocessed text (headers stripped, bullets normalized)
-        entities = postprocess_education_entities(entities, preprocessed_text)
-
-    # Step 9: Experience-specific postprocessing
-    if section_name == 'Experience':
-        entities = postprocess_experience_entities(entities, section_text)
-
-    # Step 10: Sort by score (highest first)
-    entities.sort(key=lambda x: x.get('score', 0), reverse=True)
-    
-    return entities
-
 @app.route('/')
 def index():
     """Serve the upload page"""
@@ -262,40 +169,8 @@ def upload_resume():
     # Print sections to terminal for debugging
     print_sections(sections)
 
-    # Step 4: Process Profile and Skills sections with NER (fast sections only)
-    sections_to_process_now = ['Profile', 'Skills']
-    
-    section_entities = {}
-    
-    print("\n==== Processing Fast Sections with Enhanced NER Pipeline ====")
-    
-    for section_name in sections_to_process_now:
-        section_text = sections.get(section_name, '')
-        
-        print(f"\n{'='*60}")
-        print(f"Processing: {section_name}")
-        print(f"{'='*60}")
-        
-        if section_text:
-            entities = process_section_with_ner(
-                section_text, 
-                section_name, 
-                confidence_threshold=0.5
-            )
-            section_entities[section_name] = entities
-            
-            # Print results
-            print(f"\nExtracted {len(entities)} entities:")
-            for e in entities:
-                source = f" [{e['source']}]" if 'source' in e else ""
-                print(f"  {e['entity']}: {e['text']} (confidence: {e['score']:.3f}){source}")
-        else:
-            section_entities[section_name] = []
-            print("  (Empty section)")
-
     # Parse projects/skills via regex helpers
     try:
-        from utils.section_splitter import parse_projects_from_text, parse_skills_from_text
         parsed_projects = parse_projects_from_text(sections.get('Projects', ''))
         parsed_skills = parse_skills_from_text(sections.get('Skills', ''))
     except Exception as e:
@@ -303,21 +178,7 @@ def upload_resume():
         parsed_skills = []
         print(f"Error parsing projects/skills: {e}")
 
-    # Extract profile/summary from NLP
-    profile_entities = section_entities.get('Profile', [])
-    summary_text = ''
-    for entity in profile_entities:
-        if entity['entity'] in ['Profile', 'Summary', 'PROFILE']:
-            summary_text = entity.get('text', '')
-            break
-    
-    # If no summary from entities, try to extract first few sentences from Profile section
-    if not summary_text and sections.get('Profile'):
-        profile_text = sections['Profile'].strip()
-        sentences = re.split(r'[.!?]\s+', profile_text)
-        summary_text = '. '.join(sentences[:2]) + '.' if sentences else profile_text[:200]
-
-    # Build immediate response with NLP-extracted data (contact, profile, skills, projects)
+    # Build immediate response with extracted data (contact, skills, projects)
     immediate_response = {
         'contact_info': {
             'name': '',  # Can be extracted from first line of resume
@@ -325,7 +186,6 @@ def upload_resume():
             'phone': contact_info.get('phone', '')
         },
         'profile': {
-            'summary': summary_text,
             'github': contact_info.get('github', ''),
             'linkedin': contact_info.get('linkedin', '')
         },
@@ -368,7 +228,6 @@ def upload_resume():
             # Call LLM
             refined = refine_resume(
                 resume_text=resume_text_for_llm,
-                ner_output=None,
                 backend=backend,
                 model=model_name,
                 base_url=base_url,
@@ -430,7 +289,7 @@ def recommend_roles():
     """
     Endpoint to get role recommendations based on user skills
     Expects JSON: { "skills": ["Python", "React", ...] }
-    Returns: { "recommendations": [{"role": "...", "score": ...}, ...] }
+    Returns: { "recommendations": [{"role": "...", "score": ..., "skills": "..."}, ...] }
     """
     if request.method == 'OPTIONS':
         return ('', 204)
@@ -452,11 +311,47 @@ def recommend_roles():
         print(f"Top K: {top_k}")
         
         # Query the roles using the existing function
-        recommendations = get_role_recommendations(skills, top_k=top_k)
+        result = get_role_recommendations(skills, top_k=top_k)
+        
+        # Transform the result to match frontend expectations
+        # The function returns: { "candidates": [...], "choices": [...], ... }
+        # Frontend expects: { "recommendations": [{"role": "...", "score": ..., "skills": "..."}, ...] }
+        
+        candidates = result.get('candidates', [])
+        
+        # Find the maximum score for normalization
+        max_score = max([c['aggregated_score'] for c in candidates], default=1.0)
+        # Prevent division by zero
+        if max_score == 0:
+            max_score = 1.0
+        
+        recommendations = []
+        for candidate in candidates:
+            # Get example skills from the first hit
+            example_skills = []
+            if candidate.get('example_hits'):
+                for hit in candidate['example_hits']:
+                    example_skills.extend(hit.get('skills', []))
+            
+            # Remove duplicates while preserving order
+            unique_skills = list(dict.fromkeys(example_skills))
+            
+            # Normalize score to percentage (0-100%)
+            raw_score = candidate['aggregated_score']
+            percentage_score = (raw_score / max_score) * 100
+            
+            print(f"Role: {candidate['role']}, Raw Score: {raw_score:.4f}, Percentage: {percentage_score:.1f}%")
+            
+            recommendations.append({
+                'role': candidate['role'],
+                'score': round(percentage_score, 1),  # Return as percentage
+                'skills': ', '.join(unique_skills[:10])  # Limit to 10 skills for display
+            })
         
         return jsonify({
             'recommendations': recommendations,
-            'skills_used': skills
+            'skills_used': skills,
+            'suggest_more_skills': result.get('suggest_more_skills')
         })
     
     except Exception as e:

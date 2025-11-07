@@ -148,7 +148,6 @@ export default function RecommendationsPage() {
 }
 
 function RoleCard({ recommendation, rank }: { recommendation: Recommendation; rank: number }) {
-  const matchPercentage = Math.max(0, Math.min(100, (1 - recommendation.score) * 100));
   const skillsArray = recommendation.skills.split(',').map(s => s.trim()).filter(Boolean);
 
   return (
@@ -166,20 +165,7 @@ function RoleCard({ recommendation, rank }: { recommendation: Recommendation; ra
           </div>
           <div>
             <h3 className="text-lg font-bold leading-tight">{recommendation.role}</h3>
-            <p className="text-xs text-muted-foreground mt-1">
-              {matchPercentage.toFixed(0)}% match
-            </p>
           </div>
-        </div>
-      </div>
-
-      {/* Match Score Bar */}
-      <div className="mb-4">
-        <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
-          <div 
-            className="h-full bg-gradient-to-r from-primary to-primary/60 transition-all duration-500"
-            style={{ width: `${matchPercentage}%` }}
-          />
         </div>
       </div>
 

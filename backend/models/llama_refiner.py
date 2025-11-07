@@ -30,7 +30,7 @@ SYSTEM_PROMPT = (
 )
 
 
-def build_user_prompt(resume_text: str, ner_json: Optional[Dict[str, Any]] = None) -> str:
+def build_user_prompt(resume_text: str) -> str:
     prompt = (
         "Resume Text:\n====\n"
         f"{resume_text}\n"
@@ -38,7 +38,6 @@ def build_user_prompt(resume_text: str, ner_json: Optional[Dict[str, Any]] = Non
         "Return ONLY the JSON strictly following the schema above.\n"
         "Ensure the JSON is syntactically valid and contains no commentary or markdown formatting."
     )
-    # Don't append NER hints - we're not using them anymore
     return prompt
 
 
@@ -187,7 +186,7 @@ class LlamaRefiner:
     ) -> None:
         self.backend = backend
         self.model = model or (
-            "llama3:latest" if backend == "ollama" else ""
+            "llama3:8b-instruct-q4_K_M" if backend == "ollama" else ""
         )
         self.base_url = base_url or (
             ("http://localhost:11434" if backend == "ollama" else "http://localhost:11434/v1")
@@ -203,10 +202,10 @@ class LlamaRefiner:
         self._hf_tokenizer = None
         self._hf_model = None
 
-    def refine_resume(self, resume_text: str, ner_output: Dict[str, Any]) -> Dict[str, Any]:
+    def refine_resume(self, resume_text: str) -> Dict[str, Any]:
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": build_user_prompt(resume_text, ner_output)},
+            {"role": "user", "content": build_user_prompt(resume_text)},
         ]
 
         # Debug: print final messages being sent
@@ -263,7 +262,7 @@ class LlamaRefiner:
         }
 
         payload: Dict[str, Any] = {
-            "model": self.model or "llama3:latest",
+            "model": self.model or "llama3:8b-instruct-q4_K_M",
             "messages": messages,
             "temperature": self.temperature,
             "max_tokens": self.max_new_tokens,
@@ -300,7 +299,7 @@ class LlamaRefiner:
         url = f"{base.rstrip('/')}/api/chat"
 
         payload: Dict[str, Any] = {
-            "model": self.model or "llama3:latest",
+            "model": self.model or "llama3:8b-instruct-q4_K_M",
             "messages": messages,
             "stream": False,
             # Don't force JSON format - it causes 500 errors with complex prompts
@@ -379,7 +378,7 @@ class LlamaRefiner:
         prompt = self._render_messages_to_prompt(messages)
 
         payload: Dict[str, Any] = {
-            "model": self.model or "llama3:latest",
+            "model": self.model or "llama3:8b-instruct-q4_K_M",
             "prompt": prompt,
             "stream": False,
             # Don't force JSON format - same issue as /api/chat
@@ -458,9 +457,8 @@ class LlamaRefiner:
 # Convenience functional API
 def refine_resume(
     resume_text: str,
-    ner_output: Dict[str, Any],
     backend: str = "ollama",
-    model: Optional[str] = "llama3:latest",
+    model: Optional[str] = "llama3:8b-instruct-q4_K_M",
     base_url: Optional[str] = "http://localhost:11434",
     temperature: float = 0.1,
     max_new_tokens: int = 1200,
@@ -474,7 +472,7 @@ def refine_resume(
         max_new_tokens=max_new_tokens,
         request_timeout_s=request_timeout_s,
     )
-    return ref.refine_resume(resume_text, ner_output)
+    return ref.refine_resume(resume_text)
 
 
 

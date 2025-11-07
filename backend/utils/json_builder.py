@@ -20,35 +20,6 @@ def build_resume_json(entities, raw_text):
     if 'phones' in entities and entities['phones']:
         resume_data['contact']['phone'] = entities['phones'][0] if entities['phones'] else None
     
-    # Process NER entities
-    if 'ner_entities' in entities:
-        persons = []
-        organizations = []
-        locations = []
-        
-        for entity in entities['ner_entities']:
-            entity_type = entity.get('entity_group', '')
-            entity_text = entity.get('word', '')
-            
-            if entity_type == 'PER':
-                persons.append(entity_text)
-            elif entity_type == 'ORG':
-                organizations.append(entity_text)
-            elif entity_type == 'LOC':
-                locations.append(entity_text)
-        
-        # First person mentioned is likely the candidate's name
-        if persons:
-            resume_data['personal_info']['name'] = persons[0]
-        
-        # Organizations likely represent work experience or education
-        if organizations:
-            resume_data['organizations'] = list(set(organizations))
-        
-        # Locations
-        if locations:
-            resume_data['locations'] = list(set(locations))
-    
     # Extract skills (basic keyword matching)
     resume_data['skills'] = extract_skills(raw_text)
     
