@@ -6,8 +6,10 @@ from sentence_transformers import SentenceTransformer
 from sklearn.preprocessing import normalize
 import faiss
 from dotenv import load_dotenv
+from pathlib import Path
 
-load_dotenv()  # load .env file
+BASE_DIR = Path(__file__).resolve().parent.parent  # this is backend/
+load_dotenv(BASE_DIR / ".env.local")  # load backend/.env
 
 EXCEL_PATH = os.getenv("EXCEL_PATH")
 SHEET_NAME = os.getenv("SHEET_NAME")

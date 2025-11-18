@@ -5,4 +5,5 @@ transformers
 torch
 requests
 sentence_transformers
-chromadb
+faiss-cpu
+PyPDF2

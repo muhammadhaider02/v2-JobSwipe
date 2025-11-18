@@ -5,8 +5,10 @@ from sentence_transformers import SentenceTransformer
 from sklearn.preprocessing import normalize
 import faiss
 from dotenv import load_dotenv
+from pathlib import Path
 
-load_dotenv()
+BASE_DIR = Path(__file__).resolve().parent.parent  # backend/
+load_dotenv(BASE_DIR / ".env.local")
 
 FAISS_INDEX_PATH = os.getenv("FAISS_INDEX_PATH")
 METADATA_PATH = os.getenv("METADATA_PATH")
@@ -93,7 +95,6 @@ def suggest_roles(input_skills, top_k=15, top_n_choices=9):
 
 
 if __name__ == "__main__":
-    # 🔹 Fixed input skills (you can change these)
     input_skills = ["Python", "SQL"]
 
     print(f"\n=== Query skills: {input_skills}")
