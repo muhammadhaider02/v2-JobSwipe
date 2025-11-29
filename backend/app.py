@@ -14,6 +14,7 @@ from utils.section_splitter import (
 )
 from src.llama_refiner import refine_resume
 from src.updated_query import suggest_roles as get_role_recommendations
+from src.skill_gap_analysis import analyze_skill_gap
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 25 * 1024 * 1024  # 25MB upload cap
@@ -23,6 +24,7 @@ CORS(
         "/upload": {"origins": "http://localhost:3000"},
         "/get-llm-results/*": {"origins": "http://localhost:3000"},
         "/recommend-roles": {"origins": "http://localhost:3000"},
+        "/analyze-skill-gap": {"origins": "http://localhost:3000"},
     },
     supports_credentials=False,
 )
@@ -562,6 +564,61 @@ def recommend_roles():
 
     except Exception as e:
         print(f"Error in recommend_roles: {e}")
+        import traceback
+
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/analyze-skill-gap", methods=["POST", "OPTIONS"])
+@cross_origin(
+    origins="http://localhost:3000",
+    methods=["POST", "OPTIONS"],
+    allow_headers=["Content-Type"],
+    max_age=86400,
+)
+def analyze_skill_gap_endpoint():
+    """
+    Endpoint to analyze skill gap for a specific role.
+    """
+    if request.method == "OPTIONS":
+        return ("", 204)
+
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
+
+        role = data.get("role")
+        skills = data.get("skills")
+
+        if not role:
+            return jsonify({"error": "Role is required"}), 400
+
+        if not skills or not isinstance(skills, list):
+            return jsonify({"error": "Skills must be a non-empty array"}), 400
+
+        print(f"\n==== SKILL GAP ANALYSIS REQUEST ====")
+        print(f"Role: {role}")
+        print(f"User Skills: {skills}")
+
+        # Perform skill gap analysis
+        result = analyze_skill_gap(role, skills)
+
+        print(f"\n==== SKILL GAP ANALYSIS RESPONSE ====")
+        print(f"Existing Skills: {result['existing_skills']}")
+        print(f"Required Skills: {result['required_skills']}")
+        print(f"Completion: {result['completion_percentage']}%")
+
+        return jsonify(result)
+
+    except ValueError as e:
+        # Handle role not found or other validation errors
+        print(f"Validation error in analyze_skill_gap: {e}")
+        return jsonify({"error": str(e)}), 404
+
+    except Exception as e:
+        print(f"Error in analyze_skill_gap: {e}")
         import traceback
 
         traceback.print_exc()

@@ -9,6 +9,11 @@ type Recommendation = {
   role: string;
   score: number;
   skills: string;
+  skillGapData?: {
+    existing_skills: string[];
+    required_skills: string[];
+    completion_percentage: number;
+  };
 };
 
 export default function RecommendationsPage() {
@@ -32,11 +37,11 @@ export default function RecommendationsPage() {
         setUserSkills(skills);
 
         const base = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5000';
-        
+
         // Add timeout to avoid hanging forever
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
-        
+
         try {
           const res = await fetch(`${base}/recommend-roles`, {
             method: "POST",
@@ -54,7 +59,42 @@ export default function RecommendationsPage() {
           }
 
           const data = await res.json();
-          setRecommendations(data.recommendations || []);
+          const recommendations = data.recommendations || [];
+
+          // Fetch skill gap analysis for each recommendation
+          const recommendationsWithGapData = await Promise.all(
+            recommendations.map(async (rec: Recommendation) => {
+              try {
+                const gapRes = await fetch(`${base}/analyze-skill-gap`, {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                  },
+                  body: JSON.stringify({
+                    role: rec.role,
+                    skills
+                  }),
+                });
+
+                if (gapRes.ok) {
+                  const gapData = await gapRes.json();
+                  return {
+                    ...rec,
+                    skillGapData: {
+                      existing_skills: gapData.existing_skills || [],
+                      required_skills: gapData.required_skills || [],
+                      completion_percentage: gapData.completion_percentage || 0,
+                    }
+                  };
+                }
+              } catch (error) {
+                console.error(`Failed to fetch skill gap for ${rec.role}:`, error);
+              }
+              return rec;
+            })
+          );
+
+          setRecommendations(recommendationsWithGapData);
         } catch (fetchError: any) {
           clearTimeout(timeoutId);
           if (fetchError.name === 'AbortError') {
@@ -148,7 +188,19 @@ export default function RecommendationsPage() {
 }
 
 function RoleCard({ recommendation, rank }: { recommendation: Recommendation; rank: number }) {
-  const skillsArray = recommendation.skills.split(',').map(s => s.trim()).filter(Boolean);
+  // Get all required skills from skill gap data if available
+  const allRequiredSkills = recommendation.skillGapData
+    ? [
+      ...recommendation.skillGapData.existing_skills,
+      ...recommendation.skillGapData.required_skills
+    ]
+    : recommendation.skills.split(',').map(s => s.trim()).filter(Boolean);
+
+  const existingSkills = recommendation.skillGapData?.existing_skills || [];
+  const missingSkills = recommendation.skillGapData?.required_skills || [];
+
+  // Take first 10 skills
+  const displaySkills = allRequiredSkills.slice(0, 10);
 
   return (
     <div className="bg-card border rounded-xl p-6 shadow-sm hover:shadow-md transition-all hover:border-primary/50 relative overflow-hidden">
@@ -169,20 +221,50 @@ function RoleCard({ recommendation, rank }: { recommendation: Recommendation; ra
         </div>
       </div>
 
-      {/* Required Skills */}
+      {/* Completion Percentage (if available) */}
+      {recommendation.skillGapData && (
+        <div className="mb-3">
+          <div className="flex items-center justify-between text-xs mb-1">
+            <span className="text-muted-foreground">Skill Match</span>
+            <span className="font-semibold text-primary">
+              {recommendation.skillGapData.completion_percentage}%
+            </span>
+          </div>
+          <div className="w-full bg-muted rounded-full h-1.5">
+            <div
+              className="bg-primary h-1.5 rounded-full transition-all"
+              style={{ width: `${recommendation.skillGapData.completion_percentage}%` }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Required Skills with Color Coding */}
       <div>
         <h4 className="text-xs font-semibold text-muted-foreground mb-2 uppercase">Required Skills</h4>
         <div className="flex flex-wrap gap-1.5">
-          {skillsArray.slice(0, 6).map((skill, idx) => (
-            <span key={idx} className="px-2 py-0.5 bg-muted text-foreground rounded text-xs">
-              {skill}
-            </span>
-          ))}
-          {skillsArray.length > 6 && (
-            <span className="px-2 py-0.5 text-muted-foreground text-xs">
-              +{skillsArray.length - 6} more
-            </span>
-          )}
+          {displaySkills.map((skill, idx) => {
+            const isExisting = existingSkills.some(
+              s => s.toLowerCase() === skill.toLowerCase()
+            );
+            const isMissing = missingSkills.some(
+              s => s.toLowerCase() === skill.toLowerCase()
+            );
+
+            return (
+              <span
+                key={idx}
+                className={`px-2 py-0.5 rounded text-xs ${isExisting
+                    ? 'bg-green-500/20 text-green-700 dark:text-green-400 border border-green-500/30'
+                    : isMissing
+                      ? 'bg-red-500/20 text-red-700 dark:text-red-400 border border-red-500/30'
+                      : 'bg-muted text-foreground'
+                  }`}
+              >
+                {skill}
+              </span>
+            );
+          })}
         </div>
       </div>
     </div>

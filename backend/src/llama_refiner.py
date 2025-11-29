@@ -473,7 +473,3 @@ def refine_resume(
         request_timeout_s=request_timeout_s,
     )
     return ref.refine_resume(resume_text)
-
-
-
-

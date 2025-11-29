@@ -154,8 +154,8 @@ export default function MultiStepResumeForm() {
       section === "education"
         ? { degree: "", institution: "", startYear: "", endYear: "", gpa: "" }
         : section === "experience"
-        ? { company: "", role: "", duration: "", description: "" }
-        : { name: "", description: "", link: "" };
+          ? { company: "", role: "", duration: "", description: "" }
+          : { name: "", description: "", link: "" };
 
     setForm((prev) => ({
       ...prev,
@@ -278,29 +278,7 @@ export default function MultiStepResumeForm() {
           />
         </div>
 
-        {/* JSON Preview */}
-        {(rawJson || refinedJson) && (
-          <div className="mb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <div className="text-sm font-medium mb-2">Raw JSON</div>
-              <pre className="p-3 rounded border max-h-64 overflow-auto text-xs bg-muted/30">
-                {JSON.stringify(rawJson, null, 2)}
-              </pre>
-            </div>
-            <div>
-              <div className="text-sm font-medium mb-2">Refined JSON</div>
-              {refinedJson ? (
-                <pre className="p-3 rounded border max-h-64 overflow-auto text-xs bg-muted/30">
-                  {JSON.stringify(refinedJson, null, 2)}
-                </pre>
-              ) : (
-                <div className="text-xs text-muted-foreground">
-                  No refined output (check backend refinement_error).
-                </div>
-              )}
-            </div>
-          </div>
-        )}
+
 
         <div className="mb-6">
           <div className="flex items-center justify-between mb-2">
@@ -324,13 +302,12 @@ export default function MultiStepResumeForm() {
               <button
                 key={s.id}
                 onClick={() => onJump(idx)}
-                className={`text-xs rounded-full w-8 h-8 flex items-center justify-center border transition-colors ${
-                  idx === currentStep
-                    ? "bg-primary text-primary-foreground border-primary"
-                    : idx <= maxVisitedStep
+                className={`text-xs rounded-full w-8 h-8 flex items-center justify-center border transition-colors ${idx === currentStep
+                  ? "bg-primary text-primary-foreground border-primary"
+                  : idx <= maxVisitedStep
                     ? "bg-background border-primary text-primary hover:bg-primary/10"
                     : "bg-background border-muted text-muted-foreground cursor-not-allowed"
-                }`}
+                  }`}
                 disabled={idx > maxVisitedStep}
                 aria-label={`Go to step ${s.id}`}
               >
@@ -1064,12 +1041,7 @@ function ResumeAutofillButton({
           <Upload size={14} /> {getButtonText()}
         </button>
       </div>
-      {llmStatus === "polling" && (
-        <div className="text-xs text-muted-foreground flex items-center gap-2">
-          <span className="inline-block w-3 h-3 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-          LLM is processing Education & Experience in the background...
-        </div>
-      )}
+
       {error && <span className="text-xs text-red-600">{error}</span>}
     </div>
   );
