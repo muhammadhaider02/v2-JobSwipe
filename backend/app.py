@@ -12,8 +12,8 @@ from utils.section_splitter import (
     parse_projects_from_text,
     parse_skills_from_text,
 )
-from models.llama_refiner import refine_resume
-from models.updated_query import suggest_roles as get_role_recommendations
+from src.llama_refiner import refine_resume
+from src.updated_query import suggest_roles as get_role_recommendations
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 25 * 1024 * 1024  # 25MB upload cap
