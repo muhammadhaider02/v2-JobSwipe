@@ -438,8 +438,8 @@ def upload_resume():
                 backend=backend,
                 model=model_name,
                 base_url=base_url,
-                temperature=0.1,
-                max_new_tokens=1200,
+                temperature=0.2,
+                max_new_tokens=2000,
                 request_timeout_s=300.0,
             )
 
