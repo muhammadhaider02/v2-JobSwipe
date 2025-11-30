@@ -15,6 +15,7 @@ from utils.section_splitter import (
 from src.llama_refiner import refine_resume
 from src.updated_query import suggest_roles as get_role_recommendations
 from src.skill_gap_analysis import analyze_skill_gap
+from src.skill_enrichment import enrich_skills
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 25 * 1024 * 1024  # 25MB upload cap
@@ -374,7 +375,7 @@ def upload_resume():
         link = project_links[idx] if idx < len(project_links) else ""
         proj["link"] = link
 
-    # Immediate JSON response
+    # Immediate JSON response (return parsed_skills, not enriched)
     immediate_response = {
         "contact_info": {
             "name": contact_info.get("name") or "",
@@ -388,19 +389,46 @@ def upload_resume():
             "linkedin": contact_info.get("linkedin") or "",
             "portfolio": contact_info.get("portfolio") or "",
         },
-        "skills": parsed_skills,
+        "skills": parsed_skills,  # Return original parsed skills immediately
         "projects": parsed_projects,
     }
 
     # Generate job ID for LLM processing
     job_id = str(uuid.uuid4())
 
-    # Initialize job status
+    # Initialize job status (includes both LLM and skill enrichment)
     llm_jobs[job_id] = {
         "status": "processing",
         "result": None,
         "error": None,
+        "skill_enrichment": {
+            "status": "processing",
+            "skills": None,
+            "error": None,
+        },
     }
+
+    # Background skill enrichment
+    def process_skill_enrichment_in_background():
+        try:
+            print(
+                f"\n==== Starting Skill Enrichment for job {job_id} ====",
+                flush=True,
+            )
+            enriched_skills = enrich_skills(text, parsed_skills)
+            llm_jobs[job_id]["skill_enrichment"]["status"] = "completed"
+            llm_jobs[job_id]["skill_enrichment"]["skills"] = enriched_skills
+            print(
+                f"\n==== Skill Enrichment COMPLETED for job {job_id} ====",
+                flush=True,
+            )
+        except Exception as e:
+            print(
+                f"\n==== Skill Enrichment FAILED for job {job_id}: {e} ====",
+                flush=True,
+            )
+            llm_jobs[job_id]["skill_enrichment"]["status"] = "failed"
+            llm_jobs[job_id]["skill_enrichment"]["error"] = str(e)
 
     # Background LLM processing (education + experience)
     def process_llm_in_background():
@@ -458,8 +486,12 @@ def upload_resume():
             llm_jobs[job_id]["status"] = "failed"
             llm_jobs[job_id]["error"] = str(e)
 
-    thread = threading.Thread(target=process_llm_in_background, daemon=True)
-    thread.start()
+    # Start both background threads
+    skill_thread = threading.Thread(target=process_skill_enrichment_in_background, daemon=True)
+    skill_thread.start()
+    
+    llm_thread = threading.Thread(target=process_llm_in_background, daemon=True)
+    llm_thread.start()
 
     # Return immediate response with job_id
     return jsonify({"job_id": job_id, **immediate_response})
@@ -474,7 +506,8 @@ def upload_resume():
 )
 def get_llm_results(job_id):
     """
-    Poll endpoint to check if LLM processing is complete.
+    Poll endpoint to check if LLM processing and skill enrichment are complete.
+    Returns both LLM results and enriched skills.
     """
     if request.method == "OPTIONS":
         return ("", 204)
@@ -485,10 +518,22 @@ def get_llm_results(job_id):
     job = llm_jobs[job_id]
     response = {"status": job["status"]}
 
+    # Include LLM results if completed
     if job["status"] == "completed":
         response["result"] = job["result"]
     elif job["status"] == "failed":
         response["error"] = job["error"]
+    
+    # Include skill enrichment status and results
+    skill_enrichment = job.get("skill_enrichment", {})
+    response["skill_enrichment"] = {
+        "status": skill_enrichment.get("status", "processing"),
+    }
+    
+    if skill_enrichment.get("status") == "completed":
+        response["skill_enrichment"]["skills"] = skill_enrichment.get("skills", [])
+    elif skill_enrichment.get("status") == "failed":
+        response["skill_enrichment"]["error"] = skill_enrichment.get("error", "Unknown error")
 
     return jsonify(response)
 

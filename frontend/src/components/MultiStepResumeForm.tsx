@@ -56,9 +56,9 @@ const steps = [
   { id: 1, label: "Profile" },
   { id: 2, label: "Projects" },
   { id: 3, label: "Certificates" },
-  { id: 4, label: "Education" },
-  { id: 5, label: "Experience" },
-  { id: 6, label: "Skills" },
+  { id: 4, label: "Skills" },
+  { id: 5, label: "Education" },
+  { id: 6, label: "Experience" },
 ];
 
 export default function MultiStepResumeForm() {
@@ -178,6 +178,8 @@ export default function MultiStepResumeForm() {
       if (!form.profile.name.trim()) errs.name = "Name is required";
       if (!form.profile.email.trim()) errs.email = "Email is required";
     } else if (stepIndex === 3) {
+      if (form.skills.length === 0) errs.skills = "Add at least one skill";
+    } else if (stepIndex === 4) {
       if (form.education.length === 0 || !form.education[0].degree.trim())
         errs.degree = "At least one degree is required";
       if (
@@ -185,13 +187,11 @@ export default function MultiStepResumeForm() {
         !form.education[0].institution.trim()
       )
         errs.institution = "Institution is required";
-    } else if (stepIndex === 4) {
+    } else if (stepIndex === 5) {
       if (form.experience.length === 0 || !form.experience[0].company.trim())
         errs.company = "At least one company is required";
       if (form.experience.length === 0 || !form.experience[0].role.trim())
         errs.role = "Role is required";
-    } else if (stepIndex === 5) {
-      if (form.skills.length === 0) errs.skills = "Add at least one skill";
     }
     return errs;
   }
@@ -426,7 +426,7 @@ export default function MultiStepResumeForm() {
           )}
 
           {/* STEP 5: EDUCATION */}
-          {currentStep === 3 && (
+          {currentStep === 4 && (
             <div className="space-y-6">
               {form.education.map((edu, index) => (
                 <div key={index} className="border rounded-lg p-4 relative">
@@ -531,7 +531,7 @@ export default function MultiStepResumeForm() {
           )}
 
           {/* STEP 6: EXPERIENCE */}
-          {currentStep === 4 && (
+          {currentStep === 5 && (
             <div className="space-y-6">
               {form.experience.map((exp, index) => (
                 <div key={index} className="border rounded-lg p-4 relative">
@@ -623,8 +623,8 @@ export default function MultiStepResumeForm() {
             </div>
           )}
 
-          {/* STEP 3: SKILLS */}
-          {currentStep === 5 && (
+          {/* STEP 4: SKILLS */}
+          {currentStep === 3 && (
             <div>
               <label className="text-sm font-medium">Skills</label>
               <input
@@ -920,6 +920,9 @@ function ResumeAutofillButton({
   const [llmStatus, setLlmStatus] = useState<
     "idle" | "polling" | "completed" | "failed"
   >("idle");
+  const [skillEnrichmentStatus, setSkillEnrichmentStatus] = useState<
+    "idle" | "polling" | "completed" | "failed"
+  >("idle");
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const jobIdRef = useRef<string | null>(null);
 
@@ -941,6 +944,7 @@ function ResumeAutofillButton({
         if (!res.ok) {
           if (res.status === 404) {
             setLlmStatus("failed");
+            setSkillEnrichmentStatus("failed");
             setError("Job not found");
             if (pollingIntervalRef.current)
               clearInterval(pollingIntervalRef.current);
@@ -951,6 +955,20 @@ function ResumeAutofillButton({
 
         const data = await res.json();
 
+        // Check skill enrichment status
+        if (data.skill_enrichment) {
+          if (data.skill_enrichment.status === "completed" && skillEnrichmentStatus !== "completed") {
+            setSkillEnrichmentStatus("completed");
+            if (data.skill_enrichment.skills) {
+              // Update skills with enriched skills
+              onAutofill({ skills: data.skill_enrichment.skills });
+            }
+          } else if (data.skill_enrichment.status === "failed") {
+            setSkillEnrichmentStatus("failed");
+          }
+        }
+
+        // Check LLM status
         if (data.status === "completed") {
           setLlmStatus("completed");
           if (pollingIntervalRef.current)
@@ -971,6 +989,7 @@ function ResumeAutofillButton({
     };
 
     setLlmStatus("polling");
+    setSkillEnrichmentStatus("polling");
     pollingIntervalRef.current = setInterval(poll, 2000);
     poll();
   }
@@ -981,6 +1000,7 @@ function ResumeAutofillButton({
     setLoading(true);
     setError(null);
     setLlmStatus("idle");
+    setSkillEnrichmentStatus("idle");
 
     if (pollingIntervalRef.current) {
       clearInterval(pollingIntervalRef.current);
@@ -1016,6 +1036,7 @@ function ResumeAutofillButton({
 
   const getButtonText = () => {
     if (loading) return "Uploading...";
+    if (skillEnrichmentStatus === "polling") return "Processing Skills...";
     if (llmStatus === "polling") return "Processing Education & Experience...";
     if (llmStatus === "completed") return "✓ Autofill Complete";
     if (llmStatus === "failed") return "⚠ Autofill (partial)";

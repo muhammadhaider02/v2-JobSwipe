@@ -20,7 +20,7 @@ EMBEDDING_MODEL_NAME = os.getenv("EMBEDDING_MODEL_NAME")
 def read_excel_rows(EXCEL_ROLE_RECOMMEND: str, SHEET_ROLE_RECOMMEND: str = None) -> pd.DataFrame:
     if not os.path.exists(EXCEL_ROLE_RECOMMEND):
         raise FileNotFoundError(f"Excel file not found at: {EXCEL_ROLE_RECOMMEND}")
-    df = pd.read_excel(EXCEL_ROLE_RECOMMEND, SHEET_ROLE_RECOMMEND=SHEET_ROLE_RECOMMEND)
+    df = pd.read_excel(EXCEL_ROLE_RECOMMEND, sheet_name=SHEET_ROLE_RECOMMEND)
     df.columns = [c.strip() for c in df.columns]
     return df
 

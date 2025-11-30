@@ -192,6 +192,9 @@ def parse_skills_from_text(skills_text: str) -> List[str]:
         key = s.lower()
         if key in seen:
             continue
+        # Filter out common section headings
+        if key in ['skills', 'skill', 'technical skills', 'core skills']:
+            continue
         seen.add(key)
         unique.append(s)
     return unique
