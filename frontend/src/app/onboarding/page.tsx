@@ -11,8 +11,7 @@ export default async function OnboardingPage() {
   }
 
   return (
-    <div className="flex-1 w-full flex flex-col gap-12">
-      <h2 className="font-bold text-2xl">Onboarding</h2>
+    <div className="flex-1 w-full flex flex-col">
       <MultiStepResumeForm />
     </div>
   );
