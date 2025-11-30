@@ -145,7 +145,7 @@ def enrich_skills(resume_text: str, existing_skills: List[str]) -> List[str]:
         # Load or use cached embedding model
         if _model_cache is None:
             print(f"Loading embedding model: {EMBEDDING_MODEL_NAME}")
-            _model_cache = SentenceTransformer(EMBEDDING_MODEL_NAME)
+            _model_cache = SentenceTransformer(EMBEDDING_MODEL_NAME, device="cpu")
             print("Model loaded successfully")
         else:
             print(f"Using cached embedding model: {EMBEDDING_MODEL_NAME}")

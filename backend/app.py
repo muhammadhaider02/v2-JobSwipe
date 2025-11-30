@@ -575,29 +575,51 @@ def recommend_roles():
         if max_score == 0:
             max_score = 1.0
 
-        recommendations = []
+        # Process candidates to get actual skill gap percentage
+        processed_recommendations = []
+        
+        # We take the top 20 candidates (from updated_query.py) and analyze their skill gap
+        # This ensures we filter/sort based on the ACTUAL skill match percentage, not just semantic relevance
         for candidate in candidates:
-            example_skills = []
-            if candidate.get("example_hits"):
-                for hit in candidate["example_hits"]:
-                    example_skills.extend(hit.get("skills", []))
+            role = candidate["role"]
+            
+            # Run skill gap analysis for this role
+            try:
+                gap_data = analyze_skill_gap(role, skills)
+                completion_percentage = gap_data.get("completion_percentage", 0)
+                
+                # Get unique skills from the candidate data
+                example_skills = []
+                if candidate.get("example_hits"):
+                    for hit in candidate["example_hits"]:
+                        example_skills.extend(hit.get("skills", []))
+                unique_skills = list(dict.fromkeys(example_skills))
+                
+                processed_recommendations.append({
+                    "role": role,
+                    "score": completion_percentage,  # Use actual skill match percentage
+                    "skills": ", ".join(unique_skills[:9]),
+                    "skillGapData": {
+                        "existing_skills": gap_data.get("existing_skills", []),
+                        "required_skills": gap_data.get("required_skills", []),
+                        "completion_percentage": completion_percentage
+                    }
+                })
+                
+                print(f"Role: {role}, Skill Match: {completion_percentage}%")
+                
+            except Exception as e:
+                print(f"Error analyzing skill gap for {role}: {e}")
+                continue
 
-            unique_skills = list(dict.fromkeys(example_skills))
-
-            raw_score = candidate["aggregated_score"]
-            percentage_score = (raw_score / max_score) * 100
-
-            print(
-                f"Role: {candidate['role']}, Raw Score: {raw_score:.4f}, Percentage: {percentage_score:.1f}%"
-            )
-
-            recommendations.append(
-                {
-                    "role": candidate["role"],
-                    "score": round(percentage_score, 1),
-                    "skills": ", ".join(unique_skills[:10]),
-                }
-            )
+        # Filter: only roles with >= 50% skill match
+        recommendations = [r for r in processed_recommendations if r["score"] >= 50.0]
+        
+        # Sort by score descending (highest match first)
+        recommendations.sort(key=lambda x: x["score"], reverse=True)
+        
+        # Limit to maximum 9 recommendations
+        recommendations = recommendations[:9]
 
         return jsonify(
             {

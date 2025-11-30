@@ -48,7 +48,7 @@ export default function RecommendationsPage() {
             headers: {
               "Content-Type": "application/json",
             },
-            body: JSON.stringify({ skills, top_k: 10 }),
+            body: JSON.stringify({ skills }),
             signal: controller.signal,
           });
 
@@ -61,9 +61,15 @@ export default function RecommendationsPage() {
           const data = await res.json();
           const recommendations = data.recommendations || [];
 
-          // Fetch skill gap analysis for each recommendation
+          // Fetch skill gap analysis for each recommendation ONLY if not already provided
           const recommendationsWithGapData = await Promise.all(
             recommendations.map(async (rec: Recommendation) => {
+              // If backend already provided skill gap data, use it
+              if (rec.skillGapData) {
+                return rec;
+              }
+
+              // Fallback: fetch it if missing (legacy support)
               try {
                 const gapRes = await fetch(`${base}/analyze-skill-gap`, {
                   method: "POST",
@@ -255,10 +261,10 @@ function RoleCard({ recommendation, rank }: { recommendation: Recommendation; ra
               <span
                 key={idx}
                 className={`px-2 py-0.5 rounded text-xs ${isExisting
-                    ? 'bg-green-500/20 text-green-700 dark:text-green-400 border border-green-500/30'
-                    : isMissing
-                      ? 'bg-red-500/20 text-red-700 dark:text-red-400 border border-red-500/30'
-                      : 'bg-muted text-foreground'
+                  ? 'bg-green-500/20 text-green-700 dark:text-green-400 border border-green-500/30'
+                  : isMissing
+                    ? 'bg-red-500/20 text-red-700 dark:text-red-400 border border-red-500/30'
+                    : 'bg-muted text-foreground'
                   }`}
               >
                 {skill}

@@ -2,8 +2,15 @@ flask
 pdfminer.six
 python-docx
 transformers
-torch
+torch==2.2.0
+torchvision==0.17.0
 requests
-sentence_transformers
+sentence-transformers==2.6.1
 faiss-cpu
 PyPDF2
+flask_cors
+dotenv
+pandas
+openpyxl
+numpy<2
+scikit-learn

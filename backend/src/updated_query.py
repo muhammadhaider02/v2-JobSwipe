@@ -48,7 +48,7 @@ def query_index(index, metadata, query, top_k=10):
     return results
 
 
-def suggest_roles(input_skills, top_k=15, top_n_choices=9):
+def suggest_roles(input_skills, top_k=20, top_n_choices=20):
     index, metadata = load_index_and_metadata(FAISS_INDEX_PATH, METADATA_PATH)
 
     query_text = " | ".join([s.strip() for s in input_skills if s]) + " || QuerySkills"

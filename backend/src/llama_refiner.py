@@ -463,7 +463,7 @@ def refine_resume(
     model: Optional[str] = "llama3:8b-instruct-q4_K_M",
     base_url: Optional[str] = "http://localhost:11434",
     temperature: float = 0.1,
-    max_new_tokens: int = 1200,
+    max_new_tokens: int = 1500,
     request_timeout_s: float = 300.0,
 ) -> Dict[str, Any]:
     ref = LlamaRefiner(

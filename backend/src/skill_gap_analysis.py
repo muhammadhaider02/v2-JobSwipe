@@ -1,4 +1,12 @@
 import os
+
+# --- FORCE DISABLE META TENSOR MODE ---
+os.environ["PYTORCH_DISABLE_META_LOADER"] = "1"
+os.environ["TORCH_LOAD_DIRECT"] = "1"
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+os.environ["TRANSFORMERS_NO_ADVISORY_WARNINGS"] = "1"
+os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
+
 import pandas as pd
 import numpy as np
 from sentence_transformers import SentenceTransformer
@@ -6,9 +14,15 @@ from sklearn.metrics.pairwise import cosine_similarity
 from dotenv import load_dotenv
 from pathlib import Path
 from typing import List, Dict, Any
+from threading import Lock
 
 BASE_DIR = Path(__file__).resolve().parent.parent  # backend/
 load_dotenv(BASE_DIR / ".env.local")
+
+# Set custom cache directory for sentence-transformers models
+SENTENCE_TRANSFORMERS_HOME = os.getenv("SENTENCE_TRANSFORMERS_HOME")
+if SENTENCE_TRANSFORMERS_HOME:
+    os.environ["SENTENCE_TRANSFORMERS_HOME"] = str(BASE_DIR / SENTENCE_TRANSFORMERS_HOME)
 
 SRC_DIR = Path(__file__).resolve().parent  # src/
 EXCEL_SKILL_GAP = str(SRC_DIR / os.getenv("EXCEL_SKILL_GAP"))
@@ -19,7 +33,13 @@ EMBEDDING_MODEL_NAME = os.getenv("EMBEDDING_MODEL_NAME")
 SIMILARITY_THRESHOLD = 0.65
 
 # Cache the model to avoid concurrent loading issues
+# Cache the model to avoid concurrent loading issues
 _model_cache = None
+_model_lock = Lock()
+
+# Cache the Excel data to avoid repeated reads
+_excel_cache = None
+_excel_lock = Lock()
 
 
 def load_skill_gap_data(role_name: str) -> List[str]:
@@ -36,20 +56,29 @@ def load_skill_gap_data(role_name: str) -> List[str]:
         FileNotFoundError: If Excel file doesn't exist
         ValueError: If role is not found in the Excel file
     """
-    print(f"\n==== LOADING SKILL GAP DATA ====")
-    print(f"Excel Path: {EXCEL_SKILL_GAP}")
-    print(f"Sheet Name: {SHEET_SKILL_GAP}")
+    global _excel_cache
+    
+    # Load Excel data if not cached
+    if _excel_cache is None:
+        with _excel_lock:
+            if _excel_cache is None:
+                print(f"\n==== LOADING SKILL GAP DATA ====")
+                print(f"Excel Path: {EXCEL_SKILL_GAP}")
+                print(f"Sheet Name: {SHEET_SKILL_GAP}")
+                
+                if not os.path.exists(EXCEL_SKILL_GAP):
+                    raise FileNotFoundError(f"Skill gap Excel file not found at: {EXCEL_SKILL_GAP}")
+                
+                # Read the Excel file
+                df = pd.read_excel(EXCEL_SKILL_GAP, sheet_name=SHEET_SKILL_GAP)
+                df.columns = [c.strip() for c in df.columns]
+                
+                print(f"Total roles in Excel: {len(df)}")
+                print(f"Columns: {list(df.columns)}")
+                _excel_cache = df
+    
+    df = _excel_cache
     print(f"Target Role: {role_name}")
-    
-    if not os.path.exists(EXCEL_SKILL_GAP):
-        raise FileNotFoundError(f"Skill gap Excel file not found at: {EXCEL_SKILL_GAP}")
-    
-    # Read the Excel file
-    df = pd.read_excel(EXCEL_SKILL_GAP, sheet_name=SHEET_SKILL_GAP)
-    df.columns = [c.strip() for c in df.columns]
-    
-    print(f"Total roles in Excel: {len(df)}")
-    print(f"Columns: {list(df.columns)}")
     
     # Find the row matching the role (case-insensitive)
     role_row = df[df['Role'].str.strip().str.lower() == role_name.strip().lower()]
@@ -74,6 +103,27 @@ def load_skill_gap_data(role_name: str) -> List[str]:
     print(f"Skills: {required_skills}")
     
     return required_skills
+
+
+def get_embedding_model():
+    """
+    Safely load the embedding model with thread lock to prevent concurrent loading issues.
+    
+    Returns:
+        SentenceTransformer: The cached or newly loaded embedding model
+    """
+    global _model_cache
+    if _model_cache is not None:
+        print(f"Using cached embedding model: {EMBEDDING_MODEL_NAME}")
+        return _model_cache
+
+    # Prevent concurrent model loads
+    with _model_lock:
+        if _model_cache is None:
+            print(f"Loading embedding model: {EMBEDDING_MODEL_NAME}")
+            _model_cache = SentenceTransformer(EMBEDDING_MODEL_NAME)
+
+        return _model_cache
 
 
 def compare_skills_semantic(user_skills: List[str], required_skills: List[str]) -> Dict[str, Any]:
@@ -111,15 +161,8 @@ def compare_skills_semantic(user_skills: List[str], required_skills: List[str]) 
             "skill_matches": []
         }
     
-    # Load the embedding model (use cache to avoid concurrent loading issues)
-    global _model_cache
-    if _model_cache is None:
-        print(f"Loading embedding model: {EMBEDDING_MODEL_NAME}")
-        _model_cache = SentenceTransformer(EMBEDDING_MODEL_NAME)
-    else:
-        print(f"Using cached embedding model: {EMBEDDING_MODEL_NAME}")
-    
-    model = _model_cache
+    # Load the embedding model safely
+    model = get_embedding_model()
     
     # Compute embeddings
     print("Computing embeddings for user skills...")
