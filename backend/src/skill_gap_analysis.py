@@ -254,11 +254,15 @@ def analyze_skill_gap(role_name: str, user_skills: List[str]) -> Dict[str, Any]:
     comparison_result["total_missing_skills"] = len(comparison_result["required_skills"])
     
     # Calculate completion percentage
-    if required_skills:
-        completion_percentage = (comparison_result["total_existing_skills"] / len(required_skills)) * 100
+    # Formula: (Matched Skills / (Matched Skills + Missing Skills)) * 100
+    # This ensures it never exceeds 100% and accurately reflects coverage of requirements
+    total_relevant_skills = comparison_result["total_existing_skills"] + comparison_result["total_missing_skills"]
+    
+    if total_relevant_skills > 0:
+        completion_percentage = (comparison_result["total_existing_skills"] / total_relevant_skills) * 100
         comparison_result["completion_percentage"] = round(completion_percentage, 1)
     else:
-        comparison_result["completion_percentage"] = 100.0
+        comparison_result["completion_percentage"] = 0.0
     
     print(f"\n{'='*60}")
     print(f"ANALYSIS COMPLETE")

@@ -205,8 +205,8 @@ function RoleCard({ recommendation, rank }: { recommendation: Recommendation; ra
   const existingSkills = recommendation.skillGapData?.existing_skills || [];
   const missingSkills = recommendation.skillGapData?.required_skills || [];
 
-  // Take first 10 skills
-  const displaySkills = allRequiredSkills.slice(0, 10);
+  // Take first 15 skills
+  const displaySkills = allRequiredSkills.slice(0, 15);
 
   return (
     <div className="bg-card border rounded-xl p-6 shadow-sm hover:shadow-md transition-all hover:border-primary/50 relative overflow-hidden">
