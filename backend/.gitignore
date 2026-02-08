@@ -117,11 +117,16 @@ dmypy.json
 
 sentence_transformers/
 
+# Exclude specific files but keep locally
+*.npy
+*.md
+*.sql
+
 # Job scraper - exclude utility scripts and raw data
 scraper/raw_html/
-scraper/clear_queue.py
-scraper/worker.py
-scraper/scraper_logger.py
+scraper/enrich_job_descriptions.py
 scraper/run_scraper.py
-scraper/insert_jobs_to_supabase.py
-scraper/producer.py
+scraper/scraper_logger.py
+models/skill_extractor.py
+test_glassdoor_graphql.py
+test_roles.py
