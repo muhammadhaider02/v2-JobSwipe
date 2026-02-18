@@ -1,0 +1,532 @@
+{
+  "version": "1.0",
+  "description": "Resume optimization rules for RAG-based resume enhancement",
+  "last_updated": "2026-02-18",
+  "chunks": [
+    {
+      "id": 1,
+      "chunk_text": "Always start bullet points with strong action verbs. Use: Led, Developed, Engineered, Architected, Implemented, Designed, Optimized, Automated, Spearheaded, Orchestrated. Avoid weak verbs like 'Helped', 'Worked on', 'Was responsible for'.",
+      "role_tags": ["General"],
+      "chunk_type": "action_verbs",
+      "metadata": {"priority": "high", "source": "ATS best practices"}
+    },
+    {
+      "id": 2,
+      "chunk_text": "Quantify achievements whenever possible. Include specific numbers, percentages, timeframes. Examples: 'Reduced processing time by 40%', 'Managed team of 8 engineers', 'Processed 10K+ transactions daily', 'Increased user retention by 25%'.",
+      "role_tags": ["General"],
+      "chunk_type": "quantification",
+      "metadata": {"priority": "high", "source": "Resume writing guidelines"}
+    },
+    {
+      "id": 3,
+      "chunk_text": "Use the STAR method (Situation, Task, Action, Result) for experience bullets. Structure: 'Faced X challenge/situation, implemented Y solution/action, achieved Z measurable result'. Example: 'Facing 3-hour deployment times, automated CI/CD pipeline using Jenkins, reducing deployments to 15 minutes'.",
+      "role_tags": ["General"],
+      "chunk_type": "star_method",
+      "metadata": {"priority": "high", "source": "Behavioral interview preparation"}
+    },
+    {
+      "id": 4,
+      "chunk_text": "Tailor technical skills to match the job description keywords exactly. If JD mentions 'React.js', use 'React.js' not just 'React'. If JD says 'AWS Lambda', include 'AWS Lambda' not just 'AWS'.",
+      "role_tags": ["General"],
+      "chunk_type": "ats_rule",
+      "metadata": {"priority": "critical", "source": "ATS keyword matching"}
+    },
+    {
+      "id": 5,
+      "chunk_text": "For Data Science roles, emphasize deployed models over academic metrics. Highlight: model deployment to production, scalability (millions of predictions), business impact (revenue, cost savings), A/B testing results, model monitoring.",
+      "role_tags": ["Data Science", "AI/ML", "ML Engineer"],
+      "chunk_type": "domain_rule",
+      "metadata": {"priority": "high", "source": "Data Science hiring managers"}
+    },
+    {
+      "id": 6,
+      "chunk_text": "Data Science resumes should quantify model performance. Include: accuracy improvements (e.g., '92% precision vs 78% baseline'), dataset sizes ('trained on 2M samples'), training efficiency ('reduced training time from 6 hours to 45 minutes').",
+      "role_tags": ["Data Science", "AI/ML", "ML Engineer"],
+      "chunk_type": "quantification",
+      "metadata": {"priority": "high"}
+    },
+    {
+      "id": 7,
+      "chunk_text": "List specific ML libraries and frameworks from the job description. Common keywords: TensorFlow, PyTorch, Scikit-learn, Pandas, NumPy, Matplotlib, Seaborn, XGBoost, LightGBM, Keras, ONNX, MLflow, Weights & Biases.",
+      "role_tags": ["Data Science", "AI/ML", "ML Engineer"],
+      "chunk_type": "domain_rule",
+      "metadata": {"priority": "medium"}
+    },
+    {
+      "id": 8,
+      "chunk_text": "For Data Science, highlight end-to-end ML pipeline experience: data collection, EDA, feature engineering, model training, hyperparameter tuning, evaluation, deployment, monitoring. Use phrases like 'full ML lifecycle', 'MLOps practices'.",
+      "role_tags": ["Data Science", "AI/ML", "ML Engineer"],
+      "chunk_type": "domain_rule",
+      "metadata": {"priority": "high"}
+    },
+    {
+      "id": 9,
+      "chunk_text": "Cybersecurity resumes must emphasize certifications prominently. List: CISSP, CEH, OSCP, CompTIA Security+, CISM, CISA, GIAC. Place certifications in a dedicated section near the top if the JD mentions certification requirements.",
+      "role_tags": ["Cybersecurity", "Security Engineer"],
+      "chunk_type": "domain_rule",
+      "metadata": {"priority": "critical", "source": "Cybersecurity hiring standards"}
+    },
+    {
+      "id": 10,
+      "chunk_text": "For Cybersecurity roles, list specific security tools proficiency: Wireshark, Metasploit, Nmap, Burp Suite, Splunk, SIEM platforms, IDS/IPS systems, vulnerability scanners (Nessus, Qualys), penetration testing frameworks.",
+      "role_tags": ["Cybersecurity", "Security Engineer"],
+      "chunk_type": "domain_rule",
+      "metadata": {"priority": "high"}
+    },
+    {
+      "id": 11,
+      "chunk_text": "Cybersecurity achievements should quantify risk reduction and incident response. Examples: 'Reduced security incidents by 65%', 'Identified and patched 200+ vulnerabilities', 'Responded to incidents with <2 hour MTTR', 'Conducted 15+ penetration tests'.",
+      "role_tags": ["Cybersecurity", "Security Engineer"],
+      "chunk_type": "quantification",
+      "metadata": {"priority": "high"}
+    },
+    {
+      "id": 12,
+      "chunk_text": "Highlight compliance and regulatory knowledge for Cybersecurity roles: GDPR, HIPAA, PCI-DSS, SOC 2, ISO 27001, NIST frameworks. Use phrases like 'ensured compliance with', 'implemented controls per', 'audit preparation'.",
+      "role_tags": ["Cybersecurity", "Security Engineer"],
+      "chunk_type": "domain_rule",
+      "metadata": {"priority": "medium"}
+    },
+    {
+      "id": 13,
+      "chunk_text": "For Web Development roles, emphasize performance optimization and scalability. Include: page load time improvements, Core Web Vitals scores, caching strategies, CDN implementation, database query optimization, horizontal scaling.",
+      "role_tags": ["Web Developer", "Full Stack", "Frontend", "Backend"],
+      "chunk_type": "domain_rule",
+      "metadata": {"priority": "high"}
+    },
+    {
+      "id": 14,
+      "chunk_text": "Web Developer resumes should showcase responsive design and cross-browser compatibility. Mention: mobile-first design, accessibility (WCAG compliance), progressive web apps (PWA), cross-browser testing, responsive frameworks.",
+      "role_tags": ["Web Developer", "Full Stack", "Frontend"],
+      "chunk_type": "domain_rule",
+      "metadata": {"priority": "medium"}
+    },
+    {
+      "id": 15,
+      "chunk_text": "List modern JavaScript frameworks and tools exactly as in JD: React, Vue.js, Angular, Next.js, Svelte, TypeScript, Webpack, Vite, Tailwind CSS, Material-UI, Redux, Zustand, React Query.",
+      "role_tags": ["Web Developer", "Full Stack", "Frontend"],
+      "chunk_type": "domain_rule",
+      "metadata": {"priority": "high"}
+    },
+    {
+      "id": 16,
+      "chunk_text": "For Backend roles, highlight API design and database optimization. Keywords: RESTful APIs, GraphQL, gRPC, microservices architecture, database indexing, query optimization, connection pooling, caching layers (Redis, Memcached).",
+      "role_tags": ["Backend", "Full Stack"],
+      "chunk_type": "domain_rule",
+      "metadata": {"priority": "high"}
+    },
+    {
+      "id": 17,
+      "chunk_text": "Quantify backend performance improvements: API response time reductions, throughput increases (requests/second), database query optimization results, cache hit rates, uptime percentages (99.9% SLA).",
+      "role_tags": ["Backend", "Full Stack"],
+      "chunk_type": "quantification",
+      "metadata": {"priority": "high"}
+    },
+    {
+      "id": 18,
+      "chunk_text": "For Cloud/DevOps roles, emphasize infrastructure as code and automation. Mention: Terraform, CloudFormation, Ansible, Kubernetes, Docker, CI/CD pipelines, GitOps, monitoring (Prometheus, Grafana, Datadog).",
+      "role_tags": ["DevOps", "Cloud Engineer", "Site Reliability Engineer"],
+      "chunk_type": "domain_rule",
+      "metadata": {"priority": "critical"}
+    },
+    {
+      "id": 19,
+      "chunk_text": "DevOps achievements should quantify deployment frequency and reliability. Examples: 'Increased deployment frequency from weekly to daily', 'Reduced deployment failures by 80%', 'Achieved 99.99% uptime', 'Decreased incident MTTR from 4 hours to 30 minutes'.",
+      "role_tags": ["DevOps", "Cloud Engineer", "Site Reliability Engineer"],
+      "chunk_type": "quantification",
+      "metadata": {"priority": "high"}
+    },
+    {
+      "id": 20,
+      "chunk_text": "List specific cloud platforms and services: AWS (EC2, S3, Lambda, RDS, CloudFront), Azure (VMs, Blob Storage, Functions), GCP (Compute Engine, Cloud Storage, Cloud Functions). Match exact service names from JD.",
+      "role_tags": ["DevOps", "Cloud Engineer", "Backend", "Full Stack"],
+      "chunk_type": "domain_rule",
+      "metadata": {"priority": "high"}
+    },
+    {
+      "id": 21,
+      "chunk_text": "For Mobile Development, specify platforms and native vs cross-platform. Mention: iOS (Swift, SwiftUI, UIKit), Android (Kotlin, Jetpack Compose), React Native, Flutter. Include app store metrics if available.",
+      "role_tags": ["Mobile Developer", "iOS Developer", "Android Developer"],
+      "chunk_type": "domain_rule",
+      "metadata": {"priority": "high"}
+    },
+    {
+      "id": 22,
+      "chunk_text": "Mobile Developer achievements should include user metrics and performance. Examples: 'App with 500K+ downloads', '4.8-star rating on App Store', 'Reduced app size by 35%', 'Improved launch time from 3s to 1.2s', 'Decreased crash rate to <0.1%'.",
+      "role_tags": ["Mobile Developer", "iOS Developer", "Android Developer"],
+      "chunk_type": "quantification",
+      "metadata": {"priority": "high"}
+    },
+    {
+      "id": 23,
+      "chunk_text": "For AI/ML Engineer roles, highlight model deployment architecture. Keywords: model serving (TensorFlow Serving, TorchServe), containerization (Docker), orchestration (Kubernetes), API endpoints, batch vs real-time inference, edge deployment.",
+      "role_tags": ["AI/ML", "ML Engineer"],
+      "chunk_type": "domain_rule",
+      "metadata": {"priority": "high"}
+    },
+    {
+      "id": 24,
+      "chunk_text": "AI/ML resumes should emphasize MLOps practices. Mention: experiment tracking (MLflow, Weights & Biases), model versioning, feature stores, automated retraining, model monitoring, data drift detection, A/B testing frameworks.",
+      "role_tags": ["AI/ML", "ML Engineer", "Data Science"],
+      "chunk_type": "domain_rule",
+      "metadata": {"priority": "medium"}
+    },
+    {
+      "id": 25,
+      "chunk_text": "For NLP roles, list specific techniques and models. Keywords: transformers, BERT, GPT, T5, sentiment analysis, named entity recognition, text classification, machine translation, RAG (Retrieval Augmented Generation), embeddings, vector databases.",
+      "role_tags": ["NLP Engineer", "AI/ML"],
+      "chunk_type": "domain_rule",
+      "metadata": {"priority": "high"}
+    },
+    {
+      "id": 26,
+      "chunk_text": "For Computer Vision roles, specify domains and techniques. Mention: object detection (YOLO, R-CNN), image segmentation, facial recognition, OCR, video analysis, CNN architectures, transfer learning, data augmentation techniques.",
+      "role_tags": ["CV Engineer", "Computer Vision", "AI/ML"],
+      "chunk_type": "domain_rule",
+      "metadata": {"priority": "high"}
+    },
+    {
+      "id": 27,
+      "chunk_text": "Data Analyst resumes should emphasize business impact of insights. Use phrases like: 'Identified revenue opportunity worth $2M', 'Reduced customer churn by 15%', 'Optimized marketing spend saving $500K annually', 'Improved forecast accuracy from 70% to 92%'.",
+      "role_tags": ["Data Analyst", "Business Analyst"],
+      "chunk_type": "quantification",
+      "metadata": {"priority": "high"}
+    },
+    {
+      "id": 28,
+      "chunk_text": "List business intelligence and visualization tools: Tableau, Power BI, Looker, Google Data Studio, Excel (advanced), SQL, Python (pandas, matplotlib). Mention dashboard creation, KPI tracking, stakeholder reporting.",
+      "role_tags": ["Data Analyst", "Business Analyst"],
+      "chunk_type": "domain_rule",
+      "metadata": {"priority": "high"}
+    },
+    {
+      "id": 29,
+      "chunk_text": "Avoid using personal pronouns (I, me, my, we, our). Start bullets with action verbs directly: 'Developed' not 'I developed', 'Led team of 5' not 'I led a team'.",
+      "role_tags": ["General"],
+      "chunk_type": "ats_rule",
+      "metadata": {"priority": "critical"}
+    },
+    {
+      "id": 30,
+      "chunk_text": "Keep bullet points concise, ideally 1-2 lines. Combine related achievements. Avoid lengthy paragraphs. Use punctuation sparingly—no periods at the end of bullets in experience section.",
+      "role_tags": ["General"],
+      "chunk_type": "ats_rule",
+      "metadata": {"priority": "medium"}
+    },
+    {
+      "id": 31,
+      "chunk_text": "For Product Manager roles, emphasize cross-functional collaboration and product metrics. Keywords: roadmap planning, stakeholder management, user research, A/B testing, product analytics, feature prioritization, go-to-market strategy.",
+      "role_tags": ["Product Manager"],
+      "chunk_type": "domain_rule",
+      "metadata": {"priority": "high"}
+    },
+    {
+      "id": 32,
+      "chunk_text": "Product Manager achievements should include product success metrics: user adoption rates, engagement metrics (DAU/MAU), revenue impact, feature adoption, customer satisfaction scores (NPS, CSAT), time-to-market improvements.",
+      "role_tags": ["Product Manager"],
+      "chunk_type": "quantification",
+      "metadata": {"priority": "high"}
+    },
+    {
+      "id": 33,
+      "chunk_text": "For UI/UX Designer roles, showcase design process and user impact. Mention: user research, wireframing, prototyping (Figma, Sketch, Adobe XD), usability testing, design systems, accessibility, interaction design.",
+      "role_tags": ["UI/UX Designer", "Product Designer"],
+      "chunk_type": "domain_rule",
+      "metadata": {"priority": "high"}
+    },
+    {
+      "id": 34,
+      "chunk_text": "UI/UX achievements should quantify user experience improvements: 'Increased conversion rate by 30%', 'Reduced user drop-off by 45%', 'Improved task completion time by 25%', 'Achieved 4.5/5 usability score', 'Designed for 1M+ users'.",
+      "role_tags": ["UI/UX Designer", "Product Designer"],
+      "chunk_type": "quantification",
+      "metadata": {"priority": "high"}
+    },
+    {
+      "id": 35,
+      "chunk_text": "For QA/Test Engineer roles, highlight testing frameworks and automation. Keywords: Selenium, Cypress, Jest, Pytest, JUnit, test automation, CI/CD integration, performance testing (JMeter, Gatling), API testing (Postman, REST Assured).",
+      "role_tags": ["QA Engineer", "Test Engineer", "SDET"],
+      "chunk_type": "domain_rule",
+      "metadata": {"priority": "high"}
+    },
+    {
+      "id": 36,
+      "chunk_text": "QA achievements should quantify test coverage and bug detection: 'Achieved 85% code coverage', 'Reduced production bugs by 60%', 'Automated 200+ test cases', 'Decreased testing time from 3 days to 4 hours', 'Found 150+ critical bugs pre-release'.",
+      "role_tags": ["QA Engineer", "Test Engineer", "SDET"],
+      "chunk_type": "quantification",
+      "metadata": {"priority": "high"}
+    },
+    {
+      "id": 37,
+      "chunk_text": "For Blockchain roles, specify chains and consensus mechanisms. Mention: Ethereum, Solana, Polygon, smart contracts (Solidity, Rust), Web3.js, ethers.js, DeFi protocols, NFTs, consensus algorithms (Proof of Stake, Proof of Work).",
+      "role_tags": ["Blockchain Developer", "Web3 Developer"],
+      "chunk_type": "domain_rule",
+      "metadata": {"priority": "high"}
+    },
+    {
+      "id": 38,
+      "chunk_text": "Blockchain Developer achievements should include contract deployments and transaction volumes: 'Deployed smart contracts handling $5M+ in transactions', 'Optimized gas fees by 40%', 'Audited 20+ smart contracts', 'Built DApp with 10K+ users'.",
+      "role_tags": ["Blockchain Developer", "Web3 Developer"],
+      "chunk_type": "quantification",
+      "metadata": {"priority": "medium"}
+    },
+    {
+      "id": 39,
+      "chunk_text": "Emphasize collaboration and teamwork using phrases like: 'Collaborated with cross-functional teams', 'Mentored junior developers', 'Conducted code reviews', 'Participated in Agile ceremonies', 'Presented at team meetings'.",
+      "role_tags": ["General"],
+      "chunk_type": "action_verbs",
+      "metadata": {"priority": "medium"}
+    },
+    {
+      "id": 40,
+      "chunk_text": "Include agile methodologies if mentioned in JD: Scrum, Kanban, sprint planning, daily standups, retrospectives, backlog grooming, story pointing. Use phrases like 'Agile/Scrum environment', 'iterative development'.",
+      "role_tags": ["General"],
+      "chunk_type": "domain_rule",
+      "metadata": {"priority": "low"}
+    },
+    {
+      "id": 41,
+      "chunk_text": "For leadership roles, emphasize team management metrics: team size, hiring (e.g., 'Hired and onboarded 8 engineers'), performance improvement, retention rates, mentorship programs, technical direction.",
+      "role_tags": ["Engineering Manager", "Tech Lead", "Team Lead"],
+      "chunk_type": "quantification",
+      "metadata": {"priority": "high"}
+    },
+    {
+      "id": 42,
+      "chunk_text": "Technical Lead resumes should balance technical depth and leadership. Mention: architectural decisions, technical roadmap, code reviews, tech stack selection, technical mentoring, cross-team collaboration.",
+      "role_tags": ["Engineering Manager", "Tech Lead", "Team Lead"],
+      "chunk_type": "domain_rule",
+      "metadata": {"priority": "high"}
+    },
+    {
+      "id": 43,
+      "chunk_text": "For Data Engineering roles, emphasize pipeline architecture and scale. Keywords: ETL/ELT, data warehousing (Snowflake, Redshift, BigQuery), Apache Spark, Airflow, Kafka, data lakes, stream processing, data quality, partitioning strategies.",
+      "role_tags": ["Data Engineer"],
+      "chunk_type": "domain_rule",
+      "metadata": {"priority": "high"}
+    },
+    {
+      "id": 44,
+      "chunk_text": "Data Engineering achievements should quantify data volume and performance: 'Built pipelines processing 10TB+ daily', 'Reduced data latency from 6 hours to 30 minutes', 'Improved query performance by 10x', 'Migrated 5PB to cloud data warehouse'.",
+      "role_tags": ["Data Engineer"],
+      "chunk_type": "quantification",
+      "metadata": {"priority": "high"}
+    },
+    {
+      "id": 45,
+      "chunk_text": "For Game Development roles, specify engines and platforms. Mention: Unity, Unreal Engine, Godot, C++, C#, game physics, multiplayer networking, 3D graphics, optimization for target platforms (PC, console, mobile).",
+      "role_tags": ["Game Developer"],
+      "chunk_type": "domain_rule",
+      "metadata": {"priority": "high"}
+    },
+    {
+      "id": 46,
+      "chunk_text": "Game Developer achievements should include player metrics and performance: 'Game with 2M+ downloads', 'Optimized frame rate from 30fps to 60fps', 'Reduced memory usage by 40%', 'Shipped 3 titles on Steam'.",
+      "role_tags": ["Game Developer"],
+      "chunk_type": "quantification",
+      "metadata": {"priority": "medium"}
+    },
+    {
+      "id": 47,
+      "chunk_text": "For Embedded Systems roles, specify hardware platforms and protocols. Mention: ARM, RISC-V, microcontrollers, RTOS, I2C, SPI, UART, CAN bus, power optimization, firmware development, hardware-software integration.",
+      "role_tags": ["Embedded Systems Engineer"],
+      "chunk_type": "domain_rule",
+      "metadata": {"priority": "high"}
+    },
+    {
+      "id": 48,
+      "chunk_text": "Embedded Systems achievements should quantify efficiency and reliability: 'Reduced power consumption by 50%', 'Achieved <1ms response time', 'Optimized memory footprint from 256KB to 128KB', 'Deployed to 100K+ devices'.",
+      "role_tags": ["Embedded Systems Engineer"],
+      "chunk_type": "quantification",
+      "metadata": {"priority": "high"}
+    },
+    {
+      "id": 49,
+      "chunk_text": "For Research Scientist roles, balance academic rigor with practical impact. Mention: publications (conferences, journals), research methodology, experimental design, statistical analysis, reproducibility, collaboration with academia/industry.",
+      "role_tags": ["Research Scientist"],
+      "chunk_type": "domain_rule",
+      "metadata": {"priority": "high"}
+    },
+    {
+      "id": 50,
+      "chunk_text": "Research Scientist achievements should include publications and citations: 'Published 5 papers in top-tier conferences (NeurIPS, CVPR)', '200+ citations', 'Presented at IEEE conference', 'Awarded Best Paper', 'Collaborated with MIT researchers'.",
+      "role_tags": ["Research Scientist"],
+      "chunk_type": "quantification",
+      "metadata": {"priority": "high"}
+    },
+    {
+      "id": 51,
+      "chunk_text": "Use industry-standard acronyms correctly and consistently. Examples: API (Application Programming Interface), CI/CD (Continuous Integration/Continuous Deployment), AWS (Amazon Web Services), SQL (Structured Query Language). Define obscure acronyms on first use.",
+      "role_tags": ["General"],
+      "chunk_type": "ats_rule",
+      "metadata": {"priority": "low"}
+    },
+    {
+      "id": 52,
+      "chunk_text": "For Robotics roles, specify robot types and control systems. Mention: ROS (Robot Operating System), computer vision for robotics, path planning, SLAM (Simultaneous Localization and Mapping), sensor fusion, actuators, kinematics, dynamics.",
+      "role_tags": ["Robotics Engineer"],
+      "chunk_type": "domain_rule",
+      "metadata": {"priority": "high"}
+    },
+    {
+      "id": 53,
+      "chunk_text": "Robotics achievements should quantify automation and accuracy: 'Increased picking accuracy to 99.5%', 'Reduced cycle time by 35%', 'Deployed to 50 production robots', 'Improved navigation success rate from 85% to 98%'.",
+      "role_tags": ["Robotics Engineer"],
+      "chunk_type": "quantification",
+      "metadata": {"priority": "medium"}
+    },
+    {
+      "id": 54,
+      "chunk_text": "For AR/VR roles, specify platforms and development tools. Mention: Unity XR, Unreal Engine, Meta Quest, HoloLens, ARCore, ARKit, spatial computing, 3D modeling, gesture recognition, hand tracking.",
+      "role_tags": ["AR/VR Developer"],
+      "chunk_type": "domain_rule",
+      "metadata": {"priority": "high"}
+    },
+    {
+      "id": 55,
+      "chunk_text": "Replace generic verbs with specific technical actions. Instead of 'made': use 'Built', 'Engineered', 'Architected'. Instead of 'worked with': use 'Collaborated with', 'Partnered with', 'Integrated with'. Instead of 'responsible for': use 'Led', 'Managed', 'Oversaw'.",
+      "role_tags": ["General"],
+      "chunk_type": "action_verbs",
+      "metadata": {"priority": "high"}
+    },
+    {
+      "id": 56,
+      "chunk_text": "When describing infrastructure work, use precise technical verbs: Provisioned, Containerized, Orchestrated, Configured, Deployed, Migrated, Scaled, Monitored, Automated, Secured.",
+      "role_tags": ["DevOps", "Cloud Engineer", "Site Reliability Engineer"],
+      "chunk_type": "action_verbs",
+      "metadata": {"priority": "medium"}
+    },
+    {
+      "id": 57,
+      "chunk_text": "For database-related achievements, use specific verbs: Normalized, Indexed, Partitioned, Sharded, Replicated, Optimized, Migrated, Backed up, Restored, Tuned.",
+      "role_tags": ["Backend", "Data Engineer", "Database Administrator"],
+      "chunk_type": "action_verbs",
+      "metadata": {"priority": "medium"}
+    },
+    {
+      "id": 58,
+      "chunk_text": "When describing machine learning work, use domain-specific verbs: Trained, Fine-tuned, Deployed, Evaluated, Benchmarked, Validated, Optimized, Monitored, Retrained, Experimented.",
+      "role_tags": ["Data Science", "AI/ML", "ML Engineer"],
+      "chunk_type": "action_verbs",
+      "metadata": {"priority": "medium"}
+    },
+    {
+      "id": 59,
+      "chunk_text": "Include version control and collaboration tools if in JD: Git, GitHub, GitLab, Bitbucket, pull requests, code reviews, branching strategies (Git Flow), merge conflict resolution.",
+      "role_tags": ["General"],
+      "chunk_type": "domain_rule",
+      "metadata": {"priority": "low"}
+    },
+    {
+      "id": 60,
+      "chunk_text": "For customer-facing impact, quantify user satisfaction and reach: 'Served 10M+ users', 'Achieved 95% customer satisfaction', 'Reduced support tickets by 40%', 'Improved NPS from 7 to 9', 'Enabled 50K daily active users'.",
+      "role_tags": ["General"],
+      "chunk_type": "quantification",
+      "metadata": {"priority": "medium"}
+    },
+    {
+      "id": 61,
+      "chunk_text": "Highlight cost optimization and business value: 'Reduced infrastructure costs by $100K annually', 'Saved 200 engineering hours/month', 'Generated $500K in additional revenue', 'Prevented $2M in potential security breaches'.",
+      "role_tags": ["General"],
+      "chunk_type": "quantification",
+      "metadata": {"priority": "high"}
+    },
+    {
+      "id": 62,
+      "chunk_text": "For Site Reliability Engineering roles, emphasize reliability metrics. Keywords: SLA/SLO/SLI, incident management, on-call rotation, post-mortems, chaos engineering, disaster recovery, redundancy, failover, observability.",
+      "role_tags": ["Site Reliability Engineer", "DevOps"],
+      "chunk_type": "domain_rule",
+      "metadata": {"priority": "high"}
+    },
+    {
+      "id": 63,
+      "chunk_text": "SRE achievements should quantify reliability improvements: 'Achieved 99.99% uptime (4 nines)', 'Reduced MTTR from 2 hours to 15 minutes', 'Decreased incident frequency by 70%', 'Automated 90% of operational tasks'.",
+      "role_tags": ["Site Reliability Engineer", "DevOps"],
+      "chunk_type": "quantification",
+      "metadata": {"priority": "high"}
+    },
+    {
+      "id": 64,
+      "chunk_text": "For Technical Writing roles, emphasize documentation types and audience. Mention: API documentation, developer guides, user manuals, runbooks, architecture diagrams, tutorial creation, documentation platforms (Confluence, GitBook).",
+      "role_tags": ["Technical Writer"],
+      "chunk_type": "domain_rule",
+      "metadata": {"priority": "medium"}
+    },
+    {
+      "id": 65,
+      "chunk_text": "When listing programming languages, match JD exactly and indicate proficiency levels implicitly through context. Instead of 'familiar with Python', show usage: 'Built microservices using Python and Flask'.",
+      "role_tags": ["General"],
+      "chunk_type": "ats_rule",
+      "metadata": {"priority": "medium"}
+    },
+    {
+      "id": 66,
+      "chunk_text": "For IoT roles, specify connectivity protocols and platforms. Mention: MQTT, CoAP, LoRaWAN, Zigbee, Bluetooth LE, AWS IoT, Azure IoT Hub, edge computing, sensor integration, device management.",
+      "role_tags": ["IoT Engineer"],
+      "chunk_type": "domain_rule",
+      "metadata": {"priority": "high"}
+    },
+    {
+      "id": 67,
+      "chunk_text": "IoT achievements should quantify device scale and connectivity: 'Managed fleet of 100K+ connected devices', 'Reduced data transmission costs by 60%', 'Achieved <100ms latency for edge processing', 'Improved battery life by 3x'.",
+      "role_tags": ["IoT Engineer"],
+      "chunk_type": "quantification",
+      "metadata": {"priority": "medium"}
+    },
+    {
+      "id": 68,
+      "chunk_text": "Use consistent tense: past tense for previous roles ('Developed', 'Led', 'Implemented'), present tense only for current role ('Developing', 'Leading', 'Implementing'). Never mix tenses within same role.",
+      "role_tags": ["General"],
+      "chunk_type": "ats_rule",
+      "metadata": {"priority": "critical"}
+    },
+    {
+      "id": 69,
+      "chunk_text": "Avoid buzzwords without context like 'innovative', 'passionate', 'team player', 'detail-oriented'. Instead demonstrate through specific achievements: 'Pioneered company's first microservices architecture' shows innovation better than claiming to be innovative.",
+      "role_tags": ["General"],
+      "chunk_type": "ats_rule",
+      "metadata": {"priority": "medium"}
+    },
+    {
+      "id": 70,
+      "chunk_text": "For each technical skill mentioned, provide evidence of usage in experience bullets. If resume lists 'Docker' as a skill, should have bullet like 'Containerized applications using Docker' in experience section.",
+      "role_tags": ["General"],
+      "chunk_type": "ats_rule",
+      "metadata": {"priority": "medium"}
+    },
+    {
+      "id": 71,
+      "chunk_text": "Order experience bullets by impact: most impressive achievements first. Start with quantified business impact, then technical complexity, then routine tasks. Recruiters spend ~6 seconds scanning—put best content first.",
+      "role_tags": ["General"],
+      "chunk_type": "ats_rule",
+      "metadata": {"priority": "high"}
+    },
+    {
+      "id": 72,
+      "chunk_text": "For consulting or contracting roles, clarify client industry or domain: 'Consulted for Fortune 500 financial services clients on cloud migration', 'Contracted with healthcare startup to build HIPAA-compliant platform'.",
+      "role_tags": ["General"],
+      "chunk_type": "domain_rule",
+      "metadata": {"priority": "low"}
+    },
+    {
+      "id": 73,
+      "chunk_text": "Include relevant side projects or open source contributions if limited professional experience. Mention: GitHub stars, npm downloads, contributor status to major projects, personal projects with user traction.",
+      "role_tags": ["General"],
+      "chunk_type": "domain_rule",
+      "metadata": {"priority": "low"}
+    },
+    {
+      "id": 74,
+      "chunk_text": "For Platform Engineering roles, emphasize developer experience and tooling. Keywords: internal developer platforms, self-service infrastructure, developer productivity, build systems, CI/CD tooling, service catalogs.",
+      "role_tags": ["Platform Engineer", "DevOps"],
+      "chunk_type": "domain_rule",
+      "metadata": {"priority": "medium"}
+    },
+    {
+      "id": 75,
+      "chunk_text": "Platform Engineering achievements should quantify developer productivity: 'Reduced deployment time from 2 hours to 10 minutes', 'Enabled 200+ developers with self-service platform', 'Increased deployment frequency 5x', 'Reduced onboarding time by 60%'.",
+      "role_tags": ["Platform Engineer", "DevOps"],
+      "chunk_type": "quantification",
+      "metadata": {"priority": "medium"}
+    }
+  ]
+}

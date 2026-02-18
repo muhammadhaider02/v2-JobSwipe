@@ -59,6 +59,10 @@ print("✓ Importing resume_routes...", flush=True)
 from routes.resume_routes import resume_bp
 print("✓ resume_routes imported successfully", flush=True)
 
+print("✓ Importing resume_optimization_routes...", flush=True)
+from routes.resume_optimization_routes import resume_optimization_bp
+print("✓ resume_optimization_routes imported successfully", flush=True)
+
 print("\n" + "="*60, flush=True)
 print("CREATING FLASK APP INSTANCE", flush=True)
 print("="*60, flush=True)
@@ -75,6 +79,7 @@ app.register_blueprint(job_bp)
 app.register_blueprint(job_matching_bp)
 app.register_blueprint(user_profile_bp)
 app.register_blueprint(resume_bp)
+app.register_blueprint(resume_optimization_bp)
 print("✓ All blueprints registered", flush=True)
 
 print("✓ Setting up CORS...", flush=True)
@@ -102,6 +107,13 @@ try:
         "/user-profile": {"origins": "http://localhost:3000"},
         "/user-profile/*": {"origins": "http://localhost:3000"},
         "/generate-resume": {"origins": "http://localhost:3000"},
+        "/optimize-resume": {"origins": "http://localhost:3000"},
+        "/save-optimized-resume": {"origins": "http://localhost:3000"},
+        "/resume-versions/*": {"origins": "http://localhost:3000"},
+        "/resume-version/*": {"origins": "http://localhost:3000"},
+        "/compare-resumes": {"origins": "http://localhost:3000"},
+        "/detect-job-role": {"origins": "http://localhost:3000"},
+        "/knowledge-base-stats": {"origins": "http://localhost:3000"},
     },
     supports_credentials=False,
     )

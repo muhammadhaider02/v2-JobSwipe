@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, FileText, Download, Loader2 } from "lucide-react";
+import { ArrowLeft, FileText, Download, Loader2, Sparkles, TrendingUp } from "lucide-react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 
@@ -226,6 +226,49 @@ export default function ResumePage() {
           <p className="text-muted-foreground">
             Choose a template and download your professional resume
           </p>
+        </div>
+
+        {/* NEW: Resume Optimizer Feature Card */}
+        <div className="mb-8 bg-gradient-to-r from-purple-500/10 via-pink-500/10 to-blue-500/10 border-2 border-purple-500/20 rounded-xl p-6 shadow-lg">
+          <div className="flex flex-col md:flex-row items-start md:items-center gap-4">
+            <div className="flex-shrink-0">
+              <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl flex items-center justify-center shadow-lg">
+                <Sparkles className="w-8 h-8 text-white" />
+              </div>
+            </div>
+            <div className="flex-1">
+              <div className="flex items-center gap-2 mb-2">
+                <h3 className="text-xl font-bold">✨ New Feature: AI Resume Optimizer</h3>
+                <span className="px-2 py-1 bg-purple-500 text-white text-xs font-semibold rounded-full">NEW</span>
+              </div>
+              <p className="text-muted-foreground mb-3">
+                Optimize your resume for specific job postings using AI-powered recommendations. 
+                Our smart system analyzes job descriptions and tailors your resume to match keywords, 
+                highlights relevant skills, and rewrites experience bullets for maximum impact.
+              </p>
+              <div className="flex flex-wrap gap-2 mb-3 text-sm">
+                <div className="flex items-center gap-1 text-green-600">
+                  <TrendingUp className="w-4 h-4" />
+                  <span>Metadata-filtered RAG</span>
+                </div>
+                <div className="flex items-center gap-1 text-blue-600">
+                  <Sparkles className="w-4 h-4" />
+                  <span>AI-powered optimization</span>
+                </div>
+                <div className="flex items-center gap-1 text-purple-600">
+                  <FileText className="w-4 h-4" />
+                  <span>Version tracking</span>
+                </div>
+              </div>
+              <Link
+                href="/resume-optimizer"
+                className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white rounded-lg font-medium transition-all shadow-md hover:shadow-lg"
+              >
+                <Sparkles className="w-5 h-5" />
+                Try Resume Optimizer
+              </Link>
+            </div>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
