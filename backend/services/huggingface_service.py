@@ -19,14 +19,17 @@ class HuggingFaceService:
         """Initialize HuggingFace service with API credentials"""
         self.api_key = os.getenv("HUGGINGFACE_API_KEY")
         
-        # Using Mistral-Nemo-Instruct as per blueprint recommendation
-        self.model_id = "mistralai/Mistral-Nemo-Instruct-2407"
+        # CHOICE: Meta-Llama-3.1-8B-Instruct via SambaNova
+        # Reasoning: Best balance of speed (sub-second responses) and instruction following
+        # for complex JSON formatting tasks like resume optimization.
+        self.model_id = "meta-llama/Meta-Llama-3.1-8B-Instruct"
         
         if not self.api_key:
             logger.warning("HUGGINGFACE_API_KEY not set. LLM optimization will not work.")
             self.client = None
         else:
-            # Use sambanova provider (ovhcloud no longer supported)
+            # We use SambaNova because it is significantly faster than the default HF fleet
+            # and highly reliable for Llama 3.1 models.
             self.client = InferenceClient(
                 token=self.api_key,
                 provider="sambanova"
@@ -35,10 +38,9 @@ class HuggingFaceService:
         # Generation parameters for deterministic JSON output
         self.generation_config = {
             "max_new_tokens": 2048,
-            "temperature": 0.1,  # Low temperature for more deterministic output
-            "do_sample": False,  # Deterministic generation
-            "top_p": 0.95,
-            "return_full_text": False
+            "temperature": 0.1,
+            "do_sample": False,
+            "top_p": 0.95
         }
     
     def optimize_experience_bullets(
@@ -222,44 +224,44 @@ class HuggingFaceService:
         """Build prompt for experience bullet optimization"""
         
         rules_text = "\n".join([f"- {rule}" for rule in optimization_rules])
-        keywords_text = ", ".join([kw['skill'] if isinstance(kw, dict) else kw for kw in job_keywords[:15]])  # Limit to top 15 keywords
+        keywords_text = ", ".join([kw['skill'] if isinstance(kw, dict) else kw for kw in job_keywords[:15]])
         bullets_text = "\n".join([f"{i+1}. {bullet}" for i, bullet in enumerate(original_bullets)])
         
-        prompt = f"""You are an expert resume optimizer. Your task is to rewrite resume experience bullet points to better match a specific job description while maintaining complete factual accuracy.
+        # Added a strict JSON instruction at the end of the system block for Llama-3.1
+        prompt = f"""<|begin_of_text|><|start_header_id|>system<|end_header_id|>
+You are an expert resume optimizer. Your task is to rewrite resume experience bullet points to better match a specific job description while maintaining complete factual accuracy.
 
-CRITICAL RULES - MUST FOLLOW:
-1. DO NOT add any achievements, projects, companies, or dates not present in the original bullets
-2. DO NOT invent metrics or numbers - only reformat existing ones
-3. DO NOT add skills or technologies the user hasn't mentioned
-4. ONLY rephrase and restructure existing content to align with the job requirements
-5. Use strong action verbs and quantify achievements where already present
+CRITICAL RULES:
+1. DO NOT add achievements, projects, or dates not present in the original bullets.
+2. DO NOT invent metrics.
+3. Use strong action verbs.
+4. Return ONLY a valid JSON object.
 
 TARGET JOB DESCRIPTION:
 {job_description[:1000]}
 
-KEY KEYWORDS TO INCORPORATE (if relevant): {keywords_text}
+KEY KEYWORDS: {keywords_text}
 
-OPTIMIZATION RULES TO APPLY:
+OPTIMIZATION RULES:
 {rules_text}
-
+<|eot_id|><|start_header_id|>user<|end_header_id|>
 ORIGINAL RESUME BULLETS:
 {bullets_text}
 
 YOUR TASK:
-Rewrite each bullet point following the optimization rules. For each bullet, first explain your reasoning, then provide the optimized version.
+Rewrite each bullet point. Explain reasoning, then provide the optimized version.
 
 OUTPUT FORMAT (strict JSON):
 {{
   "optimized_bullets": [
     {{
-      "original": "original bullet text",
-      "optimized": "optimized bullet text",
-      "reasoning": "why this change was made, which rules applied, which keywords matched"
+      "original": "...",
+      "optimized": "...",
+      "reasoning": "..."
     }}
   ]
 }}
-
-Return ONLY valid JSON, no other text. Ensure the optimized bullets stay truthful to the original content."""
+<|eot_id|><|start_header_id|>assistant<|end_header_id|>"""
         
         return prompt
     
