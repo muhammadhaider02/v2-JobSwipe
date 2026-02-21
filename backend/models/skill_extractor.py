@@ -524,7 +524,7 @@ def enrich_metadata_with_skills(
 
 if __name__ == "__main__":
     # Path to your metadata file
-    metadata_file = r"c:\Users\emaad\Downloads\v2-JobSwipe\backend\scraper\raw_html\demo_user_test\metadata\test_scrape_1769278238_metadata.json"
+    metadata_file = r"c:\Users\emaad\Downloads\v2-JobSwipe\backend\scraper\raw_html\demo_user_test\metadata\test_scrape_1770050165_metadata.json"
     
     # Run skill extraction
     enrich_metadata_with_skills(

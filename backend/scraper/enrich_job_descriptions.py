@@ -152,7 +152,9 @@ def enrich_metadata(metadata_path: str, headless: bool = True):
                     continue
                 
                 # Skip if description already exists
-                if job.get('description') and len(job.get('description', '').strip()) > 50:
+                description_value = job.get('description')
+                # Check if description is a valid string (not NaN or None)
+                if description_value and isinstance(description_value, str) and len(description_value.strip()) > 50:
                     logger.info(f"Description already exists, skipping...")
                     enriched_count += 1
                     continue
@@ -191,7 +193,7 @@ def enrich_metadata(metadata_path: str, headless: bool = True):
 
 if __name__ == "__main__":
     # Path to your metadata file
-    metadata_file = r"c:\Users\emaad\Downloads\v2-JobSwipe\backend\scraper\raw_html\demo_user_test\metadata\test_scrape_1769278238_metadata.json"
+    metadata_file = r"c:\Users\emaad\Downloads\v2-JobSwipe\backend\scraper\raw_html\demo_user_test\metadata\test_scrape_1770050165_metadata.json"
     
     # Run enrichment (set headless=False to see the browser)
     enrich_metadata(metadata_file, headless=True)
