@@ -315,13 +315,15 @@ class HuggingFaceService:
         prompt = f"""<|begin_of_text|><|start_header_id|>system<|end_header_id|>
 You are an expert resume optimizer. Your task is to rewrite resume experience bullet points to better match a specific job description while maintaining complete factual accuracy.
 
-CRITICAL RULES:
-1. DO NOT add achievements, projects, or dates not present in the original bullets.
-2. DO NOT invent metrics - if a measurable result is missing, you MUST include a bracketed placeholder.
-3. MANDATORY: Every bullet MUST follow STAR format with a Result. If the original lacks a result, add a placeholder: [X%], [Numerical Metric], [Time Reduced], or [Users/Revenue Impact].
-4. LENGTH LIMIT: Each optimized bullet MUST be shorter or equal length to the original. Maximum 15% increase allowed. Prefer concise phrasing.
-5. Use strong action verbs (Led, Developed, Architected, Optimized, Automated).
-6. Return ONLY a valid JSON object.
+CRITICAL RULES (FOLLOW EXACTLY OR OUTPUT WILL BE REJECTED):
+1. FACTUAL ACCURACY: DO NOT add achievements, projects, metrics, or dates not in the original bullets.
+2. LENGTH IS CRITICAL: Keep optimized bullets SAME length or SHORTER than original. If original is 20 chars, optimized must be ≤23 chars (15% max).
+   - Example 1: Original "Fixed bugs" (10 chars) → "Resolved bugs" (13 chars) ✅ | "Identified and resolved bugs" (29 chars) ❌
+   - Example 2: Original "Built features for main product" (31 chars) → "Built features for core product" (32 chars) ✅ | "Developed and deployed features for the main product" (53 chars) ❌
+3. REMOVE FILLER: Delete 'and', 'the', 'very', 'highly', 'comprehensive', 'utilizing'. Use single strong verbs.
+4. PLACEHOLDERS: Add minimal placeholders: [X%], [$X], [X users], [X days] at END only.
+5. ACTION VERBS: Led, Built, Optimized, Automated, Designed, Reduced, Implemented.
+6. JSON ONLY: Return ONLY valid JSON.
 
 TARGET JOB DESCRIPTION:
 {job_description[:1000]}
@@ -376,12 +378,15 @@ Remember: Return ONLY the JSON object above with ALL {len(original_bullets)} bul
         
         prompt = f"""You are an expert resume optimizer. Optimize the skills section to match the job description's requirements.
 
-CRITICAL RULES:
-1. DO NOT add skills the user doesn't have - ONLY refine existing skills (e.g., "React" → "React.js").
-2. ONLY reorder, rename with minor refinements, or group existing skills from the original list.
-3. Match exact keyword phrasing from job description when possible, but ONLY for skills already present.
-4. Remove irrelevant skills for this specific job.
-5. Prioritize skills mentioned in the job description.
+CRITICAL RULES (VIOLATIONS WILL BE REJECTED):
+1. ABSOLUTE PROHIBITION: DO NOT add ANY new skills. You can ONLY: reorder, rename (React → React.js), or remove skills from the original list.
+2. If a JD keyword is NOT in the original skills list, IGNORE IT COMPLETELY. Do not add it.
+3. Example VIOLATIONS that will be rejected:
+   - Original: ["Python", "React"] → Optimized: ["Python", "React", "Django"] ❌ REJECTED (added Django)
+   - Original: ["JavaScript"] → Optimized: ["JavaScript", "Node.js"] ❌ REJECTED (added Node.js)
+4. Example ACCEPTABLE changes:
+   - Original: ["React", "Python"] → Optimized: ["Python", "React.js", "JavaScript"] ✓ (only if JavaScript was in original)
+5. When in doubt, keep the original skills list unchanged.
 
 TARGET JOB DESCRIPTION:
 {job_description[:1000]}
@@ -391,11 +396,11 @@ REQUIRED KEYWORDS FROM JD: {keywords_text}
 OPTIMIZATION RULES:
 {rules_text}
 
-ORIGINAL SKILLS:
+ORIGINAL SKILLS (THIS IS YOUR ONLY SOURCE - DO NOT ADD ANYTHING NOT HERE):
 {skills_text}
 
 YOUR TASK:
-Reorder and refine the skills list to match the job requirements. Explain your reasoning.
+Reorder and refine ONLY the skills above. Do NOT add skills from the JD that aren't in the original list.
 
 OUTPUT FORMAT (strict JSON):
 {{
@@ -431,13 +436,15 @@ Return ONLY valid JSON."""
         
         prompt = f"""You are an expert resume optimizer. Rewrite the professional summary to align with a specific job posting.
 
-CRITICAL RULES:
-1. DO NOT invent job titles, companies, or qualifications not in the user's background
-2. ONLY emphasize relevant aspects of their actual experience
-3. ONLY mention skills explicitly found in USER_SKILLS list below - DO NOT mention JD keywords the user does not possess
-4. Use keywords from the job description naturally ONLY if they appear in user's skills
-5. Keep summary concise (2-4 sentences, 50-80 words)
-6. Focus on value proposition for THIS specific role
+CRITICAL RULES (VIOLATIONS WILL BE REJECTED):
+1. ABSOLUTE PROHIBITION: DO NOT mention ANY technical skills or tools not in the USER_SKILLS list below
+2. DO NOT invent job titles, companies, years of experience, or qualifications
+3. Example VIOLATIONS that will be rejected:
+   - USER_SKILLS: ["Python", "React"] → Summary mentions "Docker" or "AWS" ❌ REJECTED
+   - USER_SKILLS: ["JavaScript"] → Summary mentions "TypeScript" or "Node.js" ❌ REJECTED
+   - Original: "2 years experience" → Summary says "5+ years" ❌ REJECTED
+4. ONLY emphasize relevant aspects of actual experience
+5. Keep summary SHORT: 2-3 sentences maximum, 40-60 words
 
 TARGET JOB DESCRIPTION:
 {job_description[:1000]}
@@ -450,10 +457,12 @@ OPTIMIZATION RULES:
 USER'S BACKGROUND:
 - Recent Roles: {roles_text}
 - Original Summary: {original_summary}
-- USER_SKILLS (ONLY use skills from this list): {user_skills_text}
+
+USER_SKILLS (ONLY MENTION THESE SKILLS - NOTHING ELSE):
+{user_skills_text}
 
 YOUR TASK:
-Rewrite the summary to highlight relevant experience for this job.
+Rewrite the summary using ONLY the skills from USER_SKILLS above. Do NOT use JD keywords that aren't in USER_SKILLS.
 
 OUTPUT FORMAT (strict JSON):
 {{
@@ -754,78 +763,80 @@ Return ONLY valid JSON."""
             
             # Rule 1: Add placeholder ONLY if original lacks metrics AND optimized lacks metrics
             if not original_has_metric and not optimized_has_metric:
-                # Add appropriate placeholder based on bullet content
-                if any(word in optimized_text.lower() for word in ['reduced', 'decreased', 'improved', 'increased', 'enhanced', 'optimized']):
+                # Add appropriate placeholder based on bullet content (using word boundaries for better matching)
+                text_lower = optimized_text.lower()
+                
+                # Check for improvement/optimization keywords (handle word variations)
+                if any(re.search(r'\b' + word, text_lower) for word in ['reduc', 'decreas', 'improv', 'increas', 'enhanc', 'optimi', 'boost', 'elevat']):
                     optimized_text += ' by [X%]'
-                elif any(word in optimized_text.lower() for word in ['time', 'speed', 'performance', 'latency', 'faster']):
-                    optimized_text += ' by [X minutes/hours]'
-                elif any(word in optimized_text.lower() for word in ['user', 'customer', 'client']):
-                    optimized_text += ' impacting [X] users'
-                elif any(word in optimized_text.lower() for word in ['revenue', 'sales', 'cost']):
-                    optimized_text += ' resulting in [$X] impact'
-                elif any(word in optimized_text.lower() for word in ['team', 'engineers', 'developers']):
+                # Check for time/speed keywords
+                elif any(re.search(r'\b' + word, text_lower) for word in ['time', 'speed', 'perform', 'latenc', 'faster', 'quick', 'efficien']):
+                    optimized_text += ' to [X minutes/hours]'
+                # Check for user/customer keywords
+                elif re.search(r'\b(users?|customers?|clients?)\b', text_lower):
+                    optimized_text += ' for [X] users'
+                # Check for financial keywords
+                elif re.search(r'\b(revenue|sales|cost|sav|profit|budget)\b', text_lower):
+                    optimized_text += ' saving [$X]'
+                # Check for team collaboration keywords
+                elif re.search(r'\b(team|engineers?|developers?|collaborat|led|manag)\b', text_lower):
                     optimized_text += ' with [X] team members'
+                # Check for database/query keywords
+                elif re.search(r'\b(database|query|queries|schema|index)\b', text_lower):
+                    optimized_text += ' reducing query time by [X%]'
                 else:
-                    optimized_text += ' achieving [Add Metric]'
+                    # Last resort - add generic placeholder
+                    optimized_text += ' [quantify result]'
                 
                 reasoning += ' | ⚠️ Added editable placeholder - replace [brackets] with actual numbers'
                 placeholders_added += 1
                 logger.info(f"Added contextual metric placeholder to bullet {idx+1}")
             
-            # Rule 2: Enforce 15% length limit
+            # Rule 2: Enforce 15% length limit (smart trimming - never cut mid-word)
             original_len = len(original_bullet)
             max_allowed_len = int(original_len * 1.15)
             
+            was_trimmed = False
             if len(optimized_text) > max_allowed_len:
-                # Check if we just added a placeholder - if so, don't trim it off!
+                # Check if we just added a placeholder
                 placeholder_match = metric_regex.search(optimized_text)
                 has_placeholder = placeholder_match and '[' in placeholder_match.group()
                 
                 if has_placeholder:
                     # Find where placeholder starts
                     placeholder_pos = optimized_text.rfind('[')
+                    placeholder = optimized_text[placeholder_pos:]
+                    content_before = optimized_text[:placeholder_pos].rstrip()
                     
-                    # If placeholder would be cut, trim before it and keep placeholder
-                    if placeholder_pos > max_allowed_len * 0.8:
-                        # Trim the middle, keep placeholder at end
-                        prefix = optimized_text[:max_allowed_len - 50]  # Leave room for placeholder
-                        suffix_start = optimized_text.rfind('[')
-                        suffix = optimized_text[suffix_start:]
+                    # Calculate space available for content (leave room for placeholder + space)
+                    available_for_content = max_allowed_len - len(placeholder) - 1
+                    
+                    if len(content_before) > available_for_content:
+                        # Trim content before placeholder at word boundary
+                        truncated = content_before[:available_for_content]
+                        last_space = truncated.rfind(' ')
                         
-                        # Trim prefix at word boundary
-                        last_space = prefix.rfind(' ')
-                        if last_space > len(prefix) * 0.8:
-                            prefix = prefix[:last_space]
+                        if last_space > available_for_content * 0.7:  # At least 70% of target length
+                            truncated = truncated[:last_space]
                         
-                        trimmed = prefix + '... ' + suffix
-                        logger.info(f"Trimmed bullet {idx+1} while preserving placeholder")
-                    else:
-                        # Normal trimming - placeholder is safe
-                        trimmed = optimized_text[:max_allowed_len]
-                        last_space = trimmed.rfind(' ')
-                        if last_space > max_allowed_len * 0.9:
-                            trimmed = trimmed[:last_space]
-                        if not trimmed.endswith('.'):
-                            trimmed = trimmed.rstrip('.,;:') + '...'
-                        logger.info(f"Trimmed bullet {idx+1} from {len(optimized_text)} to {len(trimmed)} chars")
+                        optimized_text = truncated + ' ' + placeholder
+                        was_trimmed = True
+                        logger.info(f"Trimmed bullet {idx+1} content while preserving placeholder")
                 else:
-                    # Standard trimming - no placeholder to protect
+                    # No placeholder - standard trimming at word boundary
                     trimmed = optimized_text[:max_allowed_len]
-                    
-                    # Try to trim at last complete word
                     last_space = trimmed.rfind(' ')
-                    if last_space > max_allowed_len * 0.9:
+                    
+                    if last_space > max_allowed_len * 0.7:  # Keep at least 70% of target
                         trimmed = trimmed[:last_space]
                     
-                    # Add ellipsis if we cut mid-sentence
-                    if not trimmed.endswith('.'):
-                        trimmed = trimmed.rstrip('.,;:') + '...'
-                    
+                    optimized_text = trimmed.rstrip('.,;:')
+                    was_trimmed = True
                     logger.info(f"Trimmed bullet {idx+1} from {len(optimized_text)} to {len(trimmed)} chars")
                 
-                optimized_text = trimmed
-                reasoning += ' | Auto-trimmed to enforce 15% length limit'
-                bullets_trimmed += 1
+                if was_trimmed:
+                    reasoning += ' | Auto-trimmed to enforce 15% length limit'
+                    bullets_trimmed += 1
             
             enforced_bullets.append({
                 'original': original_text,
