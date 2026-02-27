@@ -306,7 +306,27 @@ class ResumeOptimizationService:
                 role_tags,
                 jd_keywords
             )
-            result['optimized']['experience'] = exp_result.get('optimized_experience', [])
+            
+            # Check for errors or validation failures
+            if 'error' in exp_result:
+                # LLM response error - keep original
+                original_experience = resume_json.get('experience', [])
+                result['optimized']['experience'] = original_experience
+                
+                # Update metadata to reflect revert
+                exp_result['optimized_experience'] = original_experience
+                logger.warning(f"Experience optimization failed: {exp_result.get('error')} - keeping original")
+            else:
+                # Check validation for length and metrics
+                llm_response = exp_result.get('llm_response', {})
+                validation = llm_response.get('validation', {})
+                
+                # Allow experience optimization even with warnings, but log them
+                if not validation.get('passed', True):
+                    logger.warning(f"Experience validation warnings: {validation.get('warnings', [])}")
+                
+                result['optimized']['experience'] = exp_result.get('optimized_experience', [])
+            
             result['metadata']['optimization_details']['experience'] = exp_result
         
         if "skills" in sections_to_optimize:
@@ -316,7 +336,25 @@ class ResumeOptimizationService:
                 role_tags,
                 jd_keywords
             )
-            result['optimized']['skills'] = skills_result.get('optimized_skills', [])
+            
+            # Check validation - if new skills were hallucinated, keep original
+            llm_response = skills_result.get('llm_response', {})
+            validation = llm_response.get('validation', {})
+            
+            if validation.get('no_new_skills_added', True) and not llm_response.get('error'):
+                result['optimized']['skills'] = skills_result.get('optimized_skills', [])
+            else:
+                # Validation failed - keep original skills
+                original_skills = resume_json.get('skills', [])
+                result['optimized']['skills'] = original_skills
+                
+                # Update metadata to reflect revert
+                skills_result['optimized_skills'] = original_skills
+                if 'llm_response' in skills_result:
+                    skills_result['llm_response']['reverted_to_original'] = True
+                    skills_result['llm_response']['reason'] = 'Validation failed: new skills detected or LLM error'
+                logger.warning("Skills validation failed - reverting to original skills")
+            
             result['metadata']['optimization_details']['skills'] = skills_result
         
         if "summary" in sections_to_optimize:
@@ -324,10 +362,29 @@ class ResumeOptimizationService:
                 resume_json.get('summary', ''),
                 job_description,
                 resume_json.get('experience', []),
+                resume_json.get('skills', []),
                 role_tags,
                 jd_keywords
             )
-            result['optimized']['summary'] = summary_result.get('optimized_summary', '')
+            
+            # Check validation - if skills were hallucinated in summary, keep original
+            llm_response = summary_result.get('llm_response', {})
+            validation = llm_response.get('validation', {})
+            
+            if validation.get('passed', True) and not llm_response.get('error'):
+                result['optimized']['summary'] = summary_result.get('optimized_summary', '')
+            else:
+                # Validation failed - keep original summary
+                original_summary = resume_json.get('summary', '')
+                result['optimized']['summary'] = original_summary
+                
+                # Update metadata to reflect revert
+                summary_result['optimized_summary'] = original_summary
+                if 'llm_response' in summary_result:
+                    summary_result['llm_response']['reverted_to_original'] = True
+                    summary_result['llm_response']['reason'] = validation.get('warnings', ['Validation failed or LLM error'])[0]
+                logger.warning(f"Summary validation failed - reverting to original: {validation.get('warnings', [])}")
+            
             result['metadata']['optimization_details']['summary'] = summary_result
         
         logger.info("Resume optimization complete")
@@ -369,6 +426,18 @@ class ResumeOptimizationService:
             job_keywords=jd_keywords
         )
         
+        # Check if optimization_result is valid
+        if not optimization_result or not isinstance(optimization_result, dict):
+            logger.error(f"Invalid optimization_result: {optimization_result}")
+            return {
+                "optimized_experience": experience_list,
+                "error": "Invalid response from optimization service",
+                "llm_response": {"error": "Empty or invalid optimization result"}
+            }
+        
+        # Log the full response for debugging
+        logger.debug(f"Experience optimization result keys: {optimization_result.keys()}")
+        
         # Reconstruct experience with optimized bullets
         # (Simple approach: replace all bullets sequentially)
         if 'optimized_bullets' in optimization_result:
@@ -399,9 +468,19 @@ class ResumeOptimizationService:
                 "llm_response": optimization_result
             }
         else:
+            # LLM didn't return optimized_bullets - could be error or unexpected response
+            error_msg = optimization_result.get('error', 'Unknown error')
+            
+            # Log what we actually received for debugging
+            logger.error(f"Experience optimization failed - no optimized_bullets in response. Error: {error_msg}")
+            logger.error(f"Response keys present: {list(optimization_result.keys())}")
+            if 'raw_response' in optimization_result:
+                logger.error(f"Raw LLM response (first 500 chars): {optimization_result['raw_response'][:500]}")
+            
             return {
                 "optimized_experience": experience_list,
-                "error": optimization_result.get('error', 'Unknown error')
+                "error": error_msg,
+                "llm_response": optimization_result  # Include full response for debugging
             }
     
     def _optimize_skills_section(
@@ -439,6 +518,7 @@ class ResumeOptimizationService:
         summary: str,
         job_description: str,
         experience_list: List[Dict],
+        user_skills: List[str],
         role_tags: List[str],
         jd_keywords: List[str]
     ) -> Dict[str, Any]:
@@ -456,6 +536,7 @@ class ResumeOptimizationService:
             original_summary=summary,
             job_description=job_description,
             user_experience=experience_list,
+            user_skills=user_skills,
             optimization_rules=rules,
             job_keywords=jd_keywords
         )
