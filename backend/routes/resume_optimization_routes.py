@@ -4,12 +4,22 @@ API endpoints for job-specific resume optimization using RAG and LLM
 """
 from flask import Blueprint, request, jsonify
 import logging
+import uuid
 from datetime import datetime
 from services.resume_optimization_service import get_resume_optimization_service
 from services.supabase_service import SupabaseService
 
 resume_optimization_bp = Blueprint('resume_optimization', __name__)
 logger = logging.getLogger(__name__)
+
+
+def _is_valid_uuid(val):
+    """Check if string is a valid UUID format"""
+    try:
+        uuid.UUID(str(val))
+        return True
+    except (ValueError, AttributeError):
+        return False
 
 
 @resume_optimization_bp.route('/optimize-resume', methods=['POST'])
@@ -121,11 +131,16 @@ def save_optimized_resume():
         if not user_id or not original_json or not optimized_json:
             return jsonify({"error": "user_id, original_json, and optimized_json are required"}), 400
         
-        # Initialize Supabase service
-        supabase_service = SupabaseService()
+        # Validate UUID format
+        if not _is_valid_uuid(user_id):
+            return jsonify({"error": "Invalid user_id format - must be a valid UUID"}), 400
+        
+        # Initialize Supabase service with service role to bypass RLS
+        # Note: We use service role because backend acts as trusted intermediary
+        supabase_service = SupabaseService(use_service_role=True)
         
         # Get next version number for this user
-        existing_resumes = supabase_service.supabase.table('resumes')\
+        existing_resumes = supabase_service.client.table('resumes')\
             .select('version')\
             .eq('user_id', user_id)\
             .order('version', desc=True)\
@@ -152,7 +167,7 @@ def save_optimized_resume():
         }
         
         # Insert into database
-        result = supabase_service.supabase.table('resumes').insert(resume_record).execute()
+        result = supabase_service.client.table('resumes').insert(resume_record).execute()
         
         if result.data:
             logger.info(f"Saved resume version {next_version} for user {user_id}")

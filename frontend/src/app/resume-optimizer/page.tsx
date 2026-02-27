@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -9,6 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Loader2, FileText, Sparkles, ArrowRight, CheckCircle2, AlertCircle, Save } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { createClient } from "@/lib/supabase/client";
 
 interface OptimizationResult {
   success: boolean;
@@ -32,6 +33,28 @@ export default function ResumeOptimizerPage() {
   const [showComparison, setShowComparison] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [savedVersionId, setSavedVersionId] = useState<number | null>(null);
+  
+  // Editable optimized resume state
+  const [editableOptimized, setEditableOptimized] = useState<any>(null);
+  
+  // Authenticated user ID
+  const [userId, setUserId] = useState<string | null>(null);
+  
+  // Fetch authenticated user on mount
+  useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        const supabase = createClient();
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          setUserId(user.id);
+        }
+      } catch (err) {
+        console.error("Error fetching user:", err);
+      }
+    };
+    fetchUser();
+  }, []);
 
   // For demo purposes - in production, this would fetch from user's profile
   const loadSampleResume = () => {
@@ -95,6 +118,7 @@ export default function ResumeOptimizerPage() {
 
       if (data.success) {
         setResult(data);
+        setEditableOptimized(JSON.parse(JSON.stringify(data.optimized))); // Deep copy for editing
         setShowComparison(true);
       } else {
         setError(data.error || "Optimization failed");
@@ -115,21 +139,23 @@ export default function ResumeOptimizerPage() {
 
   const handleSaveOptimizedResume = async () => {
     if (!result) return;
+    
+    if (!userId) {
+      setError("Please log in to save your resume");
+      return;
+    }
 
     setIsSaving(true);
     setError(null);
 
     try {
-      // In production, get user_id from auth context
-      const userId = "demo-user-uuid-123"; // Replace with actual user ID
-
       const response = await fetch("http://localhost:5000/save-optimized-resume", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           user_id: userId,
           original_json: result.original,
-          optimized_json: result.optimized,
+          optimized_json: editableOptimized || result.optimized,  // Use edited version
           job_title: "Extracted from JD", // Could parse from JD
           optimization_metadata: result.metadata,
           sections_optimized: result.metadata.sections_optimized,
@@ -268,6 +294,17 @@ export default function ResumeOptimizerPage() {
       {/* Results Comparison */}
       {showComparison && result && (
         <div className="space-y-6">
+          {/* Placeholder Notice */}
+          {result.metadata.optimization_details?.experience?.llm_response?.validation?.enforcement_applied?.placeholders_added > 0 && (
+            <Alert className="border-amber-500 bg-amber-50">
+              <AlertCircle className="h-4 w-4 text-amber-600" />
+              <AlertDescription className="text-amber-900">
+                <strong>Action Required:</strong> {result.metadata.optimization_details.experience.llm_response.validation.enforcement_applied.placeholders_added} metric placeholder(s) have been added to experience bullets. 
+                Please replace text in <code className="bg-amber-200 px-1 rounded">[brackets]</code> with your actual numbers before saving.
+              </AlertDescription>
+            </Alert>
+          )}
+          
           <div className="flex items-center justify-between">
             <h2 className="text-2xl font-bold">Optimization Results</h2>
             <div className="flex gap-2">
@@ -372,43 +409,84 @@ export default function ResumeOptimizerPage() {
               </CardContent>
             </Card>
 
-            {/* Optimized Resume */}
+            {/* Optimized Resume - EDITABLE */}
             <Card className="border-green-500">
               <CardHeader>
                 <CardTitle className="text-lg flex items-center gap-2">
                   <CheckCircle2 className="h-5 w-5 text-green-500" />
-                  Optimized Resume
+                  Optimized Resume (Editable)
                 </CardTitle>
+                <CardDescription>
+                  Edit the optimized content below. Placeholders in [brackets] should be replaced with actual metrics.
+                </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 {sectionsToOptimize.includes("summary") && (
                   <div>
                     <Label className="font-semibold">Summary</Label>
-                    <p className="text-sm mt-1 bg-green-50 p-2 rounded">{result.optimized.summary}</p>
+                    <Textarea
+                      value={editableOptimized?.summary || ""}
+                      onChange={(e) => setEditableOptimized({
+                        ...editableOptimized,
+                        summary: e.target.value
+                      })}
+                      className="mt-1 bg-green-50 border-green-200 min-h-[80px]"
+                      placeholder="Edit your summary..."
+                    />
                   </div>
                 )}
 
                 {sectionsToOptimize.includes("skills") && (
                   <div>
-                    <Label className="font-semibold">Skills</Label>
-                    <div className="flex flex-wrap gap-1 mt-1">
-                      {result.optimized.skills?.map((skill: string) => (
-                        <Badge key={skill} variant="default" className="text-xs bg-green-600">
-                          {skill}
-                        </Badge>
-                      ))}
-                    </div>
+                    <Label className="font-semibold">Skills (comma-separated)</Label>
+                    <Textarea
+                      value={editableOptimized?.skills?.join(", ") || ""}
+                      onChange={(e) => setEditableOptimized({
+                        ...editableOptimized,
+                        skills: e.target.value.split(",").map(s => s.trim()).filter(s => s)
+                      })}
+                      className="mt-1 bg-green-50 border-green-200 min-h-[60px]"
+                      placeholder="Edit your skills..."
+                    />
                   </div>
                 )}
 
                 {sectionsToOptimize.includes("experience") &&
-                  result.optimized.experience?.map((exp: any, idx: number) => (
-                    <div key={idx} className="border-l-2 border-green-500 pl-3">
+                  editableOptimized?.experience?.map((exp: any, idx: number) => (
+                    <div key={idx} className="border-l-2 border-green-500 pl-3 space-y-2">
                       <p className="font-semibold text-sm">{exp.role}</p>
-                      <p className="text-xs text-muted-foreground">{exp.company}</p>
-                      <p className="text-xs whitespace-pre-line mt-1 bg-green-50 p-2 rounded">
-                        {exp.description}
-                      </p>
+                      <p className="text-xs text-muted-foreground">{exp.company} • {exp.duration}</p>
+                      <div>
+                        <Label className="text-xs text-muted-foreground mb-1 flex items-center justify-between">
+                          <span>Experience Bullets (replace [placeholders] with actual numbers)</span>
+                          {exp.description.includes('[') && (
+                            <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 border-amber-300">
+                              Contains placeholders
+                            </Badge>
+                          )}
+                        </Label>
+                        <Textarea
+                          value={exp.description}
+                          onChange={(e) => {
+                            const updatedExperience = [...editableOptimized.experience];
+                            updatedExperience[idx] = {
+                              ...updatedExperience[idx],
+                              description: e.target.value
+                            };
+                            setEditableOptimized({
+                              ...editableOptimized,
+                              experience: updatedExperience
+                            });
+                          }}
+                          className="mt-1 bg-green-50 border-green-200 min-h-[120px] font-mono text-xs"
+                          placeholder="Edit experience bullets..."
+                        />
+                        {exp.description.includes('[') && (
+                          <p className="text-xs text-amber-600 mt-1">
+                            💡 Example: Replace "[X%]" with "35%" or "[X users]" with "10,000 users"
+                          </p>
+                        )}
+                      </div>
                     </div>
                   ))}
               </CardContent>
