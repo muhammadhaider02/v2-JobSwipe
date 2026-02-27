@@ -132,7 +132,7 @@ class HuggingFaceService:
             validation_result['metric_check'] = metric_validation_after
             validation_result['enforcement_applied'] = {
                 "placeholders_added": enforced_result['placeholders_added'],
-                "bullets_trimmed": enforced_result['bullets_trimmed']
+                "bullets_reverted": enforced_result['bullets_reverted']
             }
             
             # Update warnings to reflect enforcement
@@ -142,11 +142,11 @@ class HuggingFaceService:
                 )
                 logger.info(f"✓ Enforcement: Added {enforced_result['placeholders_added']} editable placeholders")
                 
-            if enforced_result['bullets_trimmed'] > 0:
+            if enforced_result['bullets_reverted'] > 0:
                 validation_result['warnings'].append(
-                    f"Trimmed {enforced_result['bullets_trimmed']} bullet(s) to enforce 15% length limit"
+                    f"Reverted {enforced_result['bullets_reverted']} overly verbose bullet(s) to original wording"
                 )
-                logger.info(f"✓ Enforcement: Trimmed {enforced_result['bullets_trimmed']} bullets to length limit")
+                logger.info(f"✓ Enforcement: Reverted {enforced_result['bullets_reverted']} bullets to original")
             
             # Override validation to pass if enforcement successfully addressed issues
             if enforced_result['placeholders_added'] > 0:
@@ -317,12 +317,16 @@ You are an expert resume optimizer. Your task is to rewrite resume experience bu
 
 CRITICAL RULES (FOLLOW EXACTLY OR OUTPUT WILL BE REJECTED):
 1. FACTUAL ACCURACY: DO NOT add achievements, projects, metrics, or dates not in the original bullets.
-2. LENGTH IS CRITICAL: Keep optimized bullets SAME length or SHORTER than original. If original is 20 chars, optimized must be ≤23 chars (15% max).
-   - Example 1: Original "Fixed bugs" (10 chars) → "Resolved bugs" (13 chars) ✅ | "Identified and resolved bugs" (29 chars) ❌
-   - Example 2: Original "Built features for main product" (31 chars) → "Built features for core product" (32 chars) ✅ | "Developed and deployed features for the main product" (53 chars) ❌
-3. REMOVE FILLER: Delete 'and', 'the', 'very', 'highly', 'comprehensive', 'utilizing'. Use single strong verbs.
-4. PLACEHOLDERS: Add minimal placeholders: [X%], [$X], [X users], [X days] at END only.
-5. ACTION VERBS: Led, Built, Optimized, Automated, Designed, Reduced, Implemented.
+2. PRESERVE MEANING: Keep the core meaning and key details of the original. Only improve word choice.
+3. CONCISENESS IS MANDATORY: 
+   - Maximum 30% length increase (e.g., 10 chars → max 13 chars, 20 chars → max 26 chars)
+   - If you cannot improve within this limit, return the EXACT original wording
+   - Examples:
+     ✅ "Fixed bugs" → "Resolved bugs" (10→13 chars = 30% ✓)
+     ❌ "Fixed bugs" → "Identified and resolved critical bugs" (10→37 chars = 270% ✗)
+     ✅ "Built features for product" → "Built core product features" (26→27 chars ✓)
+4. MINIMAL CHANGES: Change 1-2 words maximum. Stronger verb + remove filler words ('the', 'and', 'very').
+5. NO METRICS NEEDED: Don't add [brackets] or metrics - system handles that automatically.
 6. JSON ONLY: Return ONLY valid JSON.
 
 TARGET JOB DESCRIPTION:
@@ -703,15 +707,18 @@ Return ONLY valid JSON."""
         Post-process optimized bullets to enforce STAR method and length constraints.
         
         ENFORCEMENT RULES:
-        1. Metric Placeholders: 
+        1. Length Validation (BEFORE adding placeholders):
+           - If optimized bullet exceeds 30% length increase: REVERT to original bullet
+           - This prevents verbose, buzzword-filled optimizations
+           - Ensures bullets remain concise and readable
+           - Example: "Fixed bugs" → "Identified and resolved bugs with systematic approach" 
+             (too long) → REVERTED to "Fixed bugs"
+           
+        2. Metric Placeholders (applied to optimized OR reverted bullet):
            - Only added if ORIGINAL bullet lacks metrics (doesn't replace existing metrics)
            - Contextual placeholders based on bullet content: [X%], [X minutes], [$X], etc.
            - Marked with ⚠️ in reasoning for frontend to highlight as user-editable
-           
-        2. Length Trimming:
-           - Enforces 15% maximum length increase from original
-           - Trims at word boundaries when possible
-           - Adds ellipsis to indicate trimming
+           - Example: "Fixed bugs" → "Fixed bugs [quantify result]"
         
         Args:
             original_bullets: Original unoptimized bullets
@@ -721,13 +728,13 @@ Return ONLY valid JSON."""
             Dict with:
             - bullets: Enforced bullet list (user-editable)
             - placeholders_added: Count of placeholders added
-            - bullets_trimmed: Count of bullets trimmed
+            - bullets_reverted: Count of bullets reverted to original due to excessive length
         """
         if not optimized_bullets or not isinstance(optimized_bullets[0], dict):
             return {
                 'bullets': optimized_bullets,
                 'placeholders_added': 0,
-                'bullets_trimmed': 0
+                'bullets_reverted': 0
             }
         
         # Patterns that indicate a metric
@@ -743,7 +750,7 @@ Return ONLY valid JSON."""
         metric_regex = re.compile(combined_pattern, re.IGNORECASE)
         
         enforced_bullets = []
-        bullets_trimmed = 0
+        bullets_reverted = 0
         placeholders_added = 0
         
         for idx, bullet_data in enumerate(optimized_bullets):
@@ -761,82 +768,51 @@ Return ONLY valid JSON."""
             original_has_metric = bool(metric_regex.search(original_bullet))
             optimized_has_metric = bool(metric_regex.search(optimized_text))
             
-            # Rule 1: Add placeholder ONLY if original lacks metrics AND optimized lacks metrics
+            # Determine which placeholder to add based on content
+            placeholder_to_add = None
             if not original_has_metric and not optimized_has_metric:
-                # Add appropriate placeholder based on bullet content (using word boundaries for better matching)
                 text_lower = optimized_text.lower()
                 
                 # Check for improvement/optimization keywords (handle word variations)
                 if any(re.search(r'\b' + word, text_lower) for word in ['reduc', 'decreas', 'improv', 'increas', 'enhanc', 'optimi', 'boost', 'elevat']):
-                    optimized_text += ' by [X%]'
+                    placeholder_to_add = ' by [X%]'
                 # Check for time/speed keywords
                 elif any(re.search(r'\b' + word, text_lower) for word in ['time', 'speed', 'perform', 'latenc', 'faster', 'quick', 'efficien']):
-                    optimized_text += ' to [X minutes/hours]'
+                    placeholder_to_add = ' to [X minutes/hours]'
                 # Check for user/customer keywords
                 elif re.search(r'\b(users?|customers?|clients?)\b', text_lower):
-                    optimized_text += ' for [X] users'
+                    placeholder_to_add = ' for [X] users'
                 # Check for financial keywords
                 elif re.search(r'\b(revenue|sales|cost|sav|profit|budget)\b', text_lower):
-                    optimized_text += ' saving [$X]'
+                    placeholder_to_add = ' saving [$X]'
                 # Check for team collaboration keywords
                 elif re.search(r'\b(team|engineers?|developers?|collaborat|led|manag)\b', text_lower):
-                    optimized_text += ' with [X] team members'
+                    placeholder_to_add = ' with [X] team members'
                 # Check for database/query keywords
                 elif re.search(r'\b(database|query|queries|schema|index)\b', text_lower):
-                    optimized_text += ' reducing query time by [X%]'
+                    placeholder_to_add = ' reducing query time by [X%]'
                 else:
                     # Last resort - add generic placeholder
-                    optimized_text += ' [quantify result]'
-                
+                    placeholder_to_add = ' [quantify result]'
+            
+            # Rule 1: Length validation before adding placeholder
+            # Check if optimized version (before placeholder) is too verbose
+            original_len = len(original_bullet)
+            max_allowed_len = int(original_len * 1.3)  # 30% max increase
+            
+            # If optimized is too long, revert to original
+            if len(optimized_text) > max_allowed_len:
+                logger.info(f"Bullet {idx+1} too verbose ({len(optimized_text)} chars vs original {original_len}), reverting to original")
+                optimized_text = original_bullet
+                reasoning = f"LLM output too verbose, kept original | {reasoning}"
+                bullets_reverted += 1
+            
+            # Rule 2: Add placeholder if needed (to either optimized or reverted bullet)
+            if placeholder_to_add:
+                optimized_text += placeholder_to_add
                 reasoning += ' | ⚠️ Added editable placeholder - replace [brackets] with actual numbers'
                 placeholders_added += 1
                 logger.info(f"Added contextual metric placeholder to bullet {idx+1}")
-            
-            # Rule 2: Enforce 15% length limit (smart trimming - never cut mid-word)
-            original_len = len(original_bullet)
-            max_allowed_len = int(original_len * 1.15)
-            
-            was_trimmed = False
-            if len(optimized_text) > max_allowed_len:
-                # Check if we just added a placeholder
-                placeholder_match = metric_regex.search(optimized_text)
-                has_placeholder = placeholder_match and '[' in placeholder_match.group()
-                
-                if has_placeholder:
-                    # Find where placeholder starts
-                    placeholder_pos = optimized_text.rfind('[')
-                    placeholder = optimized_text[placeholder_pos:]
-                    content_before = optimized_text[:placeholder_pos].rstrip()
-                    
-                    # Calculate space available for content (leave room for placeholder + space)
-                    available_for_content = max_allowed_len - len(placeholder) - 1
-                    
-                    if len(content_before) > available_for_content:
-                        # Trim content before placeholder at word boundary
-                        truncated = content_before[:available_for_content]
-                        last_space = truncated.rfind(' ')
-                        
-                        if last_space > available_for_content * 0.7:  # At least 70% of target length
-                            truncated = truncated[:last_space]
-                        
-                        optimized_text = truncated + ' ' + placeholder
-                        was_trimmed = True
-                        logger.info(f"Trimmed bullet {idx+1} content while preserving placeholder")
-                else:
-                    # No placeholder - standard trimming at word boundary
-                    trimmed = optimized_text[:max_allowed_len]
-                    last_space = trimmed.rfind(' ')
-                    
-                    if last_space > max_allowed_len * 0.7:  # Keep at least 70% of target
-                        trimmed = trimmed[:last_space]
-                    
-                    optimized_text = trimmed.rstrip('.,;:')
-                    was_trimmed = True
-                    logger.info(f"Trimmed bullet {idx+1} from {len(optimized_text)} to {len(trimmed)} chars")
-                
-                if was_trimmed:
-                    reasoning += ' | Auto-trimmed to enforce 15% length limit'
-                    bullets_trimmed += 1
             
             enforced_bullets.append({
                 'original': original_text,
@@ -844,12 +820,12 @@ Return ONLY valid JSON."""
                 'reasoning': reasoning
             })
         
-        logger.info(f"Enforcement complete: {placeholders_added} placeholders added, {bullets_trimmed} bullets trimmed")
+        logger.info(f"Enforcement complete: {placeholders_added} placeholders added, {bullets_reverted} bullets reverted to original")
         
         return {
             'bullets': enforced_bullets,
             'placeholders_added': placeholders_added,
-            'bullets_trimmed': bullets_trimmed
+            'bullets_reverted': bullets_reverted
         }
     
     def _normalize_experience_response(self, result: Dict[str, Any], original_bullets: List[str]) -> Optional[Dict[str, Any]]:
