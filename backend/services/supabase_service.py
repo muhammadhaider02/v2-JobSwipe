@@ -124,6 +124,24 @@ class SupabaseService:
             logger.error(f"Error fetching new jobs from Supabase: {e}")
             raise
     
+    def fetch_user_profile(self, user_id: str) -> Dict[str, Any]:
+        """Fetch a user profile by user_id.
+        Returns a dict with user profile fields or empty dict if not found.
+        """
+        try:
+            response = (
+                self.client.table('user_profiles')
+                .select('*')
+                .eq('user_id', user_id)
+                .execute()
+            )
+            data = response.data if response.data else []
+            logger.info(f"Fetched user profile for user_id {user_id}: {bool(data)}")
+            return data[0] if data else {}
+        except Exception as e:
+            logger.error(f"Error fetching user profile for {user_id}: {e}")
+            raise
+
     def fetch_job_by_id(self, job_id: str) -> Optional[Dict[str, Any]]:
         """
         Fetch a single job by its ID.
@@ -147,4 +165,30 @@ class SupabaseService:
             return None
         except Exception as e:
             logger.error(f"Error fetching job {job_id} from Supabase: {e}")
+            raise
+
+    def fetch_five_user_profiles(self) -> List[Dict[str, Any]]:
+        """Fetch up to 5 user profile rows.
+        Returns a list of at most 5 user profile dictionaries.
+        """
+        try:
+            response = self.client.table('user_profiles').select('*').limit(5).execute()
+            profiles = response.data if response.data else []
+            logger.info(f"Fetched {len(profiles)} user profiles (limit 5) from Supabase")
+            return profiles
+        except Exception as e:
+            logger.error(f"Error fetching limited user profiles: {e}")
+            raise
+
+    def fetch_five_jobs(self) -> List[Dict[str, Any]]:
+        """Fetch up to 5 job rows.
+        Returns a list of at most 5 job dictionaries.
+        """
+        try:
+            response = self.client.table(self.table_name).select('*').limit(1).execute()
+            jobs = response.data if response.data else []
+            logger.info(f"Fetched {len(jobs)} jobs (limit 5) from Supabase")
+            return jobs
+        except Exception as e:
+            logger.error(f"Error fetching limited jobs: {e}")
             raise
