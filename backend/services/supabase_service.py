@@ -148,3 +148,32 @@ class SupabaseService:
         except Exception as e:
             logger.error(f"Error fetching job {job_id} from Supabase: {e}")
             raise
+    
+    def fetch_user_profile(self, user_id: str) -> Dict[str, Any]:
+        """
+        Fetch a user profile by user_id.
+        
+        Args:
+            user_id: The user_id to fetch
+            
+        Returns:
+            User profile dictionary, or empty dict if not found
+        """
+        try:
+            logger.info(f"Fetching user profile for user_id: {user_id}")
+            response = (
+                self.client.table("user_profiles")
+                .select("*")
+                .eq("user_id", user_id)
+                .execute()
+            )
+            
+            if response.data and len(response.data) > 0:
+                logger.info(f"Successfully fetched user profile for {user_id}")
+                return response.data[0]
+            
+            logger.warning(f"No user profile found for user_id: {user_id}")
+            return {}
+        except Exception as e:
+            logger.error(f"Error fetching user profile {user_id} from Supabase: {e}")
+            raise

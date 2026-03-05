@@ -14,7 +14,8 @@ import {
   Award,
   Target,
   CheckCircle2,
-  XCircle
+  XCircle,
+  Mail
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -437,6 +438,17 @@ export default function JobsPage() {
                           </div>
                         </div>
                       )}
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="mt-4 pt-4 border-t border-gray-200 flex gap-3">
+                      <button
+                        onClick={() => router.push(`/cover-letter?jobId=${job.job_id}`)}
+                        className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 text-white rounded-lg font-medium transition-all shadow-sm hover:shadow-md"
+                      >
+                        <Mail className="w-4 h-4" />
+                        Generate Cover Letter
+                      </button>
                     </div>
                   </Card>
                 ))}

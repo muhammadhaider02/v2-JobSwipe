@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { Briefcase, Sparkles, ArrowLeft, Loader2, BookOpen, Check, FileText } from "lucide-react";
+import { Briefcase, Sparkles, ArrowLeft, Loader2, BookOpen, Check, FileText, Mail } from "lucide-react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 
@@ -336,7 +336,7 @@ export default function RecommendationsPage() {
                 Browse real job listings that match your recommended roles and skill level. 
                 Start applying to positions that align with your expertise.
               </p>
-              <div className="flex items-center justify-center gap-4">
+              <div className="flex flex-wrap items-center justify-center gap-4">
                 <button
                   onClick={handleBrowseJobs}
                   className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-lg font-medium transition-all shadow-md hover:shadow-lg"
@@ -347,6 +347,10 @@ export default function RecommendationsPage() {
                 <Link href="/resume" className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-lg font-medium transition-all shadow-md hover:shadow-lg">
                   <FileText className="w-5 h-5" />
                   Create Resume
+                </Link>
+                <Link href="/cover-letter" className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 text-white rounded-lg font-medium transition-all shadow-md hover:shadow-lg">
+                  <Mail className="w-5 h-5" />
+                  Generate Cover Letter
                 </Link>
               </div>
             </div>

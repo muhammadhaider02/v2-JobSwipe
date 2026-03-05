@@ -39,6 +39,7 @@ from routes.quiz_routes import quiz_bp
 print("✓ Importing job_routes...", flush=True)
 try:
     from routes.job_routes import job_bp
+    from routes.cover_letter_routes import cover_letter_bp
     print("✓ job_routes imported successfully!", flush=True)
 except Exception as e:
     print(f"❌ ERROR importing job_routes: {e}", flush=True)
@@ -80,7 +81,7 @@ app.register_blueprint(job_matching_bp)
 app.register_blueprint(user_profile_bp)
 app.register_blueprint(resume_bp)
 app.register_blueprint(resume_optimization_bp)
-print("✓ All blueprints registered", flush=True)
+app.register_blueprint(cover_letter_bp)
 
 print("✓ Setting up CORS...", flush=True)
 
