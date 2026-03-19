@@ -2,15 +2,39 @@ flask
 pdfminer.six
 python-docx
 transformers
-torch==2.2.0
-torchvision==0.17.0
+torch>=2.9.0
+torchvision>=0.20.0
 requests
 sentence-transformers==2.6.1
 faiss-cpu
 PyPDF2
 flask_cors
-dotenv
+python-dotenv
 pandas
 openpyxl
-numpy<2
 scikit-learn
+aiohttp
+redis
+playwright
+beautifulsoup4
+lxml
+pydantic>=2.0.0
+markdownify>=0.11.0
+python-jobspy
+supabase==2.10.0
+reportlab
+huggingface-hub>=0.20.0
+
+# LangGraph Multi-Agent Framework
+langgraph==0.2.51
+langchain-core<0.4.0,>=0.3.78
+langchain-community==0.3.31
+
+# Job Scraping with Anti-Bot Capabilities
+scrapling[fetchers]==0.4.1
+
+# Redis for Job Queue Management
+redis[hiredis]==5.0.1
+
+# OpenAI-compatible client for SambaNova
+openai==1.51.2

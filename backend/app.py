@@ -4,6 +4,7 @@ import os
 import re
 import uuid
 import threading
+from typing import Any, Dict, List
 from pdfminer.high_level import extract_text
 from docx import Document
 from utils.section_splitter import (
@@ -16,6 +17,12 @@ from src.llama_refiner import refine_resume
 from src.updated_query import suggest_roles as get_role_recommendations
 from src.skill_gap_analysis import analyze_skill_gap
 from src.skill_enrichment import enrich_skills
+from services.supabase_service import SupabaseService
+
+# Import blueprints
+from routes.campaign_routes import campaign_bp
+from routes.resume_optimization_routes import resume_optimization_bp
+from routes.cover_letter_routes import cover_letter_bp
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 25 * 1024 * 1024  # 25MB upload cap
@@ -26,6 +33,15 @@ CORS(
         "/get-llm-results/*": {"origins": "http://localhost:3000"},
         "/recommend-roles": {"origins": "http://localhost:3000"},
         "/analyze-skill-gap": {"origins": "http://localhost:3000"},
+        "/save-profile": {"origins": "http://localhost:3000"},
+        "/get-profile/*": {"origins": "http://localhost:3000"},
+        "/user-profile": {"origins": "http://localhost:3000"},
+        "/user-profile/*": {"origins": "http://localhost:3000"},
+        "/api/jobs/*": {"origins": "http://localhost:3000"},
+        "/cover-letter-templates": {"origins": "http://localhost:3000"},
+        "/generate-cover-letter": {"origins": "http://localhost:3000"},
+        "/prepare-application-materials": {"origins": "http://localhost:3000"},
+        "/application-materials/save-draft": {"origins": "http://localhost:3000"},
     },
     supports_credentials=False,
 )
@@ -34,6 +50,93 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 # In-memory storage for LLM processing jobs
 llm_jobs = {}  # {job_id: {'status': 'processing'|'completed'|'failed', 'result': {...}, 'error': str}}
+
+# Initialize Supabase service
+supabase_service = SupabaseService()
+
+# Register blueprints
+app.register_blueprint(campaign_bp)
+app.register_blueprint(resume_optimization_bp)
+app.register_blueprint(cover_letter_bp)
+
+
+def _normalize_profile_payload(data):
+    """Accept both legacy and frontend-friendly payload shapes."""
+    user_id = data.get("user_id")
+    profile_data = data.get("profile_data")
+
+    # Allow direct profile payload as a convenience format.
+    if user_id and not profile_data:
+        profile_data = {k: v for k, v in data.items() if k != "user_id"}
+
+    return user_id, profile_data
+
+
+def _normalize_job_record_for_vetting(job: Dict[str, Any]) -> Dict[str, Any]:
+    """Map DB job record shape to vetting node expected fields."""
+    skills = job.get("skills_required") or job.get("skills") or []
+    if isinstance(skills, str):
+        skills = [s.strip() for s in skills.split(",") if s.strip()]
+
+    return {
+        "job_id": job.get("job_id", ""),
+        "title": job.get("job_title") or job.get("title") or "",
+        "company": job.get("company") or "",
+        "location": job.get("location") or "",
+        "industry": job.get("industry") or "",
+        "description": job.get("job_description") or job.get("description") or "",
+        "skills": skills if isinstance(skills, list) else [],
+        "experience_required": job.get("experience_required"),
+        "employment_type": job.get("job_type") or job.get("employment_type") or "",
+        # DB jobs are already structured, so set confidence high for vetting stage.
+        "enrichment_confidence": 1.0,
+    }
+
+
+def _score_query_relevance(job: Dict[str, Any], query_tokens: List[str]) -> int:
+    """Simple lexical score to pre-rank DB jobs before vetting."""
+    if not query_tokens:
+        return 1
+
+    title = str(job.get("title") or "").lower()
+    company = str(job.get("company") or "").lower()
+    location = str(job.get("location") or "").lower()
+    description = str(job.get("description") or "").lower()
+    skills = " ".join([str(s).lower() for s in (job.get("skills") or [])])
+
+    score = 0
+    for token in query_tokens:
+        if token in title:
+            score += 4
+        if token in skills:
+            score += 3
+        if token in description:
+            score += 2
+        if token in company or token in location:
+            score += 1
+    return score
+
+
+def _load_db_jobs_for_vetting(search_query: str, max_candidates: int = 250) -> List[Dict[str, Any]]:
+    """Load persisted jobs from DB and pre-rank by query relevance."""
+    response = supabase_service.client.table("jobs").select("*").limit(max_candidates).execute()
+    rows = response.data or []
+
+    normalized = [_normalize_job_record_for_vetting(row) for row in rows]
+
+    tokens = [t.strip().lower() for t in re.split(r"\s+", search_query or "") if t.strip()]
+    scored = []
+    for job in normalized:
+        relevance = _score_query_relevance(job, tokens)
+        scored.append((relevance, job))
+
+    # Keep jobs that match query terms; fallback to all if query is too strict.
+    matched = [job for relevance, job in scored if relevance > 0]
+    if matched:
+        scored = [(r, j) for r, j in scored if r > 0]
+
+    scored.sort(key=lambda item: item[0], reverse=True)
+    return [job for _, job in scored]
 
 
 def extract_text_from_file(path: str) -> str:
@@ -689,6 +792,350 @@ def analyze_skill_gap_endpoint():
         import traceback
 
         traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/save-profile", methods=["POST", "OPTIONS"])
+@cross_origin(
+    origins="http://localhost:3000",
+    methods=["POST", "OPTIONS"],
+    allow_headers=["Content-Type"],
+    max_age=86400,
+)
+def save_profile_endpoint():
+    """
+    Endpoint to save or update user profile.
+    """
+    if request.method == "OPTIONS":
+        return ("", 204)
+
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
+
+        user_id, profile_data = _normalize_profile_payload(data)
+
+        if not user_id:
+            return jsonify({"error": "user_id is required"}), 400
+
+        if not profile_data:
+            return jsonify({"error": "profile_data is required"}), 400
+
+        print(f"\n==== SAVING USER PROFILE ====")
+        print(f"User ID: {user_id}")
+        print(f"Profile fields: {list(profile_data.keys())}")
+
+        # Save profile to database
+        success = supabase_service.upsert_user_profile(user_id, profile_data)
+
+        if success:
+            print(f"✅ Profile saved successfully for user {user_id}")
+            return jsonify({
+                "success": True,
+                "message": "Profile saved successfully"
+            }), 200
+        else:
+            print(f"❌ Failed to save profile for user {user_id}")
+            return jsonify({
+                "success": False,
+                "error": "Failed to save profile"
+            }), 500
+
+    except Exception as e:
+        print(f"Error in save_profile: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/get-profile/<user_id>", methods=["GET", "OPTIONS"])
+@cross_origin(
+    origins="http://localhost:3000",
+    methods=["GET", "OPTIONS"],
+    allow_headers=["Content-Type"],
+    max_age=86400,
+)
+def get_profile_endpoint(user_id):
+    """
+    Endpoint to retrieve user profile.
+    """
+    if request.method == "OPTIONS":
+        return ("", 204)
+
+    try:
+        if not user_id:
+            return jsonify({"error": "user_id is required"}), 400
+
+        print(f"\n==== FETCHING USER PROFILE ====")
+        print(f"User ID: {user_id}")
+
+        # Get profile from database
+        profile = supabase_service.get_user_profile(user_id)
+
+        if profile:
+            print(f"✅ Profile retrieved successfully for user {user_id}")
+            return jsonify({
+                "success": True,
+                "profile": profile
+            }), 200
+        else:
+            print(f"⚠️  No profile found for user {user_id}")
+            return jsonify({
+                "success": False,
+                "profile": None,
+                "message": "No profile found"
+            }), 404
+
+    except Exception as e:
+        print(f"Error in get_profile: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/user-profile", methods=["POST", "OPTIONS"])
+@cross_origin(
+    origins="http://localhost:3000",
+    methods=["POST", "OPTIONS"],
+    allow_headers=["Content-Type"],
+    max_age=86400,
+)
+def user_profile_save_alias():
+    """Compatibility alias for frontend profile writes."""
+    if request.method == "OPTIONS":
+        return ("", 204)
+
+    try:
+        data = request.get_json() or {}
+        user_id, profile_data = _normalize_profile_payload(data)
+
+        if not user_id:
+            return jsonify({"error": "user_id is required"}), 400
+
+        if profile_data is None:
+            return jsonify({"error": "profile_data is required"}), 400
+
+        success = supabase_service.upsert_user_profile(user_id, profile_data)
+        if not success:
+            return jsonify({"success": False, "error": "Failed to save profile"}), 500
+
+        return jsonify({"success": True, "message": "Profile saved successfully"}), 200
+
+    except Exception as e:
+        print(f"Error in user_profile alias save: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/user-profile/<user_id>", methods=["GET", "OPTIONS"])
+@cross_origin(
+    origins="http://localhost:3000",
+    methods=["GET", "OPTIONS"],
+    allow_headers=["Content-Type"],
+    max_age=86400,
+)
+def user_profile_get_alias(user_id):
+    """Compatibility alias for frontend profile reads."""
+    if request.method == "OPTIONS":
+        return ("", 204)
+
+    try:
+        if not user_id:
+            return jsonify({"error": "user_id is required"}), 400
+
+        profile = supabase_service.get_user_profile(user_id)
+        if not profile:
+            return jsonify({"success": False, "profile": None, "message": "No profile found"}), 404
+
+        return jsonify({"success": True, "profile": profile}), 200
+
+    except Exception as e:
+        print(f"Error in user_profile alias get: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/jobs/vetted", methods=["POST", "OPTIONS"])
+@cross_origin(
+    origins="http://localhost:3000",
+    methods=["POST", "OPTIONS"],
+    allow_headers=["Content-Type"],
+    max_age=86400,
+)
+def vet_jobs_endpoint():
+    """
+    Endpoint to vet jobs for a user.
+
+    Default mode uses persisted DB jobs only (no scraping). Set mode="scrape"
+    explicitly if you want the original Scout → Enricher → Vetting pipeline.
+    
+    Request body:
+    {
+        "user_id": "uuid-string",
+        "search_query": "python developer in lahore"
+    }
+    
+    Response:
+    {
+        "success": true,
+        "vetted_jobs": [...],
+        "stats": {
+            "total_jobs_found": 10,
+            "jobs_passed_vetting": 7,
+            "top_match_score": 0.85
+        }
+    }
+    """
+    if request.method == "OPTIONS":
+        return ("", 204)
+    
+    try:
+        data = request.get_json()
+        
+        if not data:
+            return jsonify({"error": "No JSON data provided"}), 400
+        
+        user_id = data.get("user_id")
+        search_query = data.get("search_query")
+        
+        if not user_id or not search_query:
+            return jsonify({"error": "user_id and search_query are required"}), 400
+        
+        mode = str(data.get("mode", "db")).lower()
+        result_limit = int(data.get("limit", 10) or 10)
+        result_limit = max(1, min(result_limit, 50))
+
+        print(f"\n==== JOB VETTING PIPELINE STARTED ====")
+        print(f"User ID: {user_id}")
+        print(f"Query: {search_query}\n")
+        print(f"Mode: {mode}\n")
+        
+        # Import agent nodes
+        from agents.nodes import digital_scout_node, job_enricher_node, vetting_officer_node
+        from agents.state import AgentState
+        from langchain_core.messages import HumanMessage
+        
+        # Initialize state
+        state: AgentState = {
+            "messages": [HumanMessage(content=search_query)],
+            "user_id": user_id,
+            "user_profile": None,
+            "search_query": search_query,
+            "raw_job_list": [],
+            "scraping_status": "pending",
+            "current_page": 1,
+            "vetted_jobs": [],
+            "target_job": None,
+            "optimized_materials": None,
+            "human_approval": None,
+            "error": None,
+            "retry_count": 0
+        }
+        
+        if mode == "scrape":
+            # Optional legacy mode: scrape fresh jobs first.
+            print("\n=== STEP 1: DIGITAL SCOUT ===")
+            scout_result = digital_scout_node(state)
+            state.update(scout_result)
+
+            raw_jobs = state.get("raw_job_list", [])
+            if not raw_jobs:
+                return jsonify({
+                    "success": True,
+                    "vetted_jobs": [],
+                    "stats": {
+                        "total_jobs_found": 0,
+                        "jobs_passed_vetting": 0,
+                        "top_match_score": 0
+                    },
+                    "message": "No jobs found matching your query",
+                    "source": "scrape"
+                }), 200
+
+            print("\n=== STEP 2: JOB ENRICHER ===")
+            enricher_result = job_enricher_node(state)
+            state.update(enricher_result)
+            raw_jobs = state.get("raw_job_list", [])
+        else:
+            # Default mode: use already persisted jobs from DB.
+            print("\n=== STEP 1: LOAD JOBS FROM DATABASE ===")
+            raw_jobs = _load_db_jobs_for_vetting(search_query=search_query)
+            state["raw_job_list"] = raw_jobs
+
+            if not raw_jobs:
+                return jsonify({
+                    "success": True,
+                    "vetted_jobs": [],
+                    "stats": {
+                        "total_jobs_found": 0,
+                        "jobs_passed_vetting": 0,
+                        "top_match_score": 0
+                    },
+                    "message": "No stored jobs found in database",
+                    "source": "db"
+                }), 200
+        
+        # Step 3: Vetting Officer - Score and filter
+        print("\n=== STEP 3: VETTING OFFICER ===")
+        vetting_result = vetting_officer_node(state)
+        state.update(vetting_result)
+        
+        vetted_jobs = state.get("vetted_jobs", [])[:result_limit]
+        
+        # Build stats
+        stats = {
+            "total_jobs_found": len(raw_jobs),
+            "jobs_passed_vetting": len(state.get("vetted_jobs", [])),
+            "returned_jobs": len(vetted_jobs),
+            "top_match_score": vetted_jobs[0]["match_score"] if vetted_jobs else 0,
+            "average_match_score": sum(j["match_score"] for j in vetted_jobs) / len(vetted_jobs) if vetted_jobs else 0,
+            "high_confidence_matches": sum(1 for j in vetted_jobs if j["match_score"] >= 0.75),
+            "medium_confidence_matches": sum(1 for j in vetted_jobs if 0.60 <= j["match_score"] < 0.75)
+        }
+        
+        print(f"\n==== PIPELINE COMPLETE ====")
+        print(f"✅ {stats['total_jobs_found']} candidate jobs loaded")
+        print(f"✅ {stats['jobs_passed_vetting']} jobs passed vetting")
+        print(f"✅ {stats['returned_jobs']} jobs returned")
+        print(f"✅ Top match score: {stats['top_match_score']:.2f}\n")
+        
+        return jsonify({
+            "success": True,
+            "vetted_jobs": vetted_jobs,
+            "stats": stats,
+            "source": mode,
+        }), 200
+    
+    except Exception as e:
+        print(f"❌ Error in vet_jobs endpoint: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/jobs/<job_id>", methods=["GET", "OPTIONS"])
+@cross_origin(
+    origins="http://localhost:3000",
+    methods=["GET", "OPTIONS"],
+    allow_headers=["Content-Type"],
+    max_age=86400,
+)
+def get_job_detail_endpoint(job_id):
+    """Fetch one job from the persisted jobs table."""
+    if request.method == "OPTIONS":
+        return ("", 204)
+
+    try:
+        if not job_id:
+            return jsonify({"error": "job_id is required"}), 400
+
+        job = supabase_service.get_job_by_id(job_id)
+        if not job:
+            return jsonify({"success": False, "error": "Job not found"}), 404
+
+        return jsonify({"success": True, "job": job}), 200
+
+    except Exception as e:
+        print(f"Error in get job detail: {e}")
         return jsonify({"error": str(e)}), 500
 
 

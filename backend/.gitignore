@@ -114,5 +114,8 @@ dmypy.json
 
 # pytype static type analyzer
 .pytype/
+*.ps1
+
+*.md 
 
 sentence_transformers/

@@ -61,13 +61,19 @@ const steps = [
   { id: 6, label: "Experience" },
 ];
 
-export default function MultiStepResumeForm() {
+interface MultiStepResumeFormProps {
+  userId: string;
+}
+
+export default function MultiStepResumeForm({ userId }: MultiStepResumeFormProps) {
   const [currentStep, setCurrentStep] = useState(0);
   const [maxVisitedStep, setMaxVisitedStep] = useState(0);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [rawJson, setRawJson] = useState<any | null>(null);
   const [refinedJson, setRefinedJson] = useState<BackendJson | null>(null);
+  const [isLoadingProfile, setIsLoadingProfile] = useState(true);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
 
   const [form, setForm] = useState<FormState>({
     profile: {
@@ -215,12 +221,88 @@ export default function MultiStepResumeForm() {
     }
   }
 
-  function onSubmit() {
+  async function onSubmit() {
     const v = validateStep(currentStep);
     setErrors(v);
     if (Object.keys(v).length === 0) {
-      const skillsParam = encodeURIComponent(JSON.stringify(form.skills));
-      window.location.href = `/recommendations?skills=${skillsParam}`;
+      try {
+        setIsSavingProfile(true);
+        
+        // Calculate years of experience from experience array
+        const yearsOfExperience = form.experience.reduce((total, exp) => {
+          const durationMatch = exp.duration.match(/(\d+)/);
+          return total + (durationMatch ? parseInt(durationMatch[1]) : 0);
+        }, 0);
+
+        // Prepare profile data for backend
+        const profileData = {
+          name: form.profile.name,
+          email: form.profile.email,
+          phone: form.profile.phone,
+          location: form.profile.location,
+          summary: form.profile.summary,
+          github: form.profile.github,
+          linkedin: form.profile.linkedin,
+          portfolio: form.profile.portfolio,
+          profile_picture_url: form.profile.profilePictureUrl,
+          skills: form.skills,
+          previous_roles: form.experience.map(exp => exp.role).filter(Boolean),
+          years_of_experience: yearsOfExperience,
+          projects: form.projects.map(proj => ({
+            name: proj.name,
+            description: proj.description,
+            link: proj.link,
+          })),
+          certificates: form.certificates.name ? [{
+            name: form.certificates.name,
+            issuer: form.certificates.issuer,
+            issue_date: form.certificates.issueDate,
+            expiry_date: form.certificates.expiryDate,
+          }] : [],
+          education: form.education.map(edu => ({
+            degree: edu.degree,
+            institution: edu.institution,
+            start_year: edu.startYear,
+            end_year: edu.endYear,
+            gpa: edu.gpa,
+          })),
+          experience: form.experience.map(exp => ({
+            company: exp.company,
+            role: exp.role,
+            duration: exp.duration,
+            description: exp.description,
+          })),
+        };
+
+        // Save profile to backend
+        const base = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
+        const response = await fetch(`${base}/save-profile`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            user_id: userId,
+            profile_data: profileData,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error("Failed to save profile");
+        }
+
+        const result = await response.json();
+        console.log("Profile saved:", result);
+
+        // Redirect to recommendations
+        const skillsParam = encodeURIComponent(JSON.stringify(form.skills));
+        window.location.href = `/recommendations?skills=${skillsParam}`;
+      } catch (error) {
+        console.error("Error saving profile:", error);
+        alert("Failed to save profile. Please try again.");
+      } finally {
+        setIsSavingProfile(false);
+      }
     }
   }
 
@@ -263,8 +345,94 @@ export default function MultiStepResumeForm() {
     };
   }, [form.profile.profilePictureUrl]);
 
+  // Load existing profile on component mount
+  useEffect(() => {
+    async function loadProfile() {
+      if (!userId) {
+        setIsLoadingProfile(false);
+        return;
+      }
+
+      try {
+        const base = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
+        const response = await fetch(`${base}/get-profile/${userId}`);
+        
+        if (response.ok) {
+          const result = await response.json();
+          if (result.success && result.profile) {
+            const profile = result.profile;
+            
+            // Map database profile to form state
+            setForm({
+              profile: {
+                name: profile.name || "",
+                email: profile.email || "",
+                phone: profile.phone || "",
+                location: profile.location || "",
+                summary: profile.summary || "",
+                github: profile.github || "",
+                linkedin: profile.linkedin || "",
+                portfolio: profile.portfolio || "",
+                profilePictureUrl: profile.profile_picture_url,
+              },
+              education: profile.education && profile.education.length > 0
+                ? profile.education.map((edu: any) => ({
+                    degree: edu.degree || "",
+                    institution: edu.institution || "",
+                    startYear: edu.start_year || "",
+                    endYear: edu.end_year || "",
+                    gpa: edu.gpa || "",
+                  }))
+                : [{ degree: "", institution: "", startYear: "", endYear: "", gpa: "" }],
+              experience: profile.experience && profile.experience.length > 0
+                ? profile.experience.map((exp: any) => ({
+                    company: exp.company || "",
+                    role: exp.role || "",
+                    duration: exp.duration || "",
+                    description: exp.description || "",
+                  }))
+                : [{ company: "", role: "", duration: "", description: "" }],
+              projects: profile.projects && profile.projects.length > 0
+                ? profile.projects.map((proj: any) => ({
+                    name: proj.name || "",
+                    description: proj.description || "",
+                    link: proj.link || "",
+                  }))
+                : [{ name: "", description: "", link: "" }],
+              skills: profile.skills || [],
+              certificates: profile.certificates && profile.certificates.length > 0
+                ? {
+                    name: profile.certificates[0].name || "",
+                    issuer: profile.certificates[0].issuer || "",
+                    issueDate: profile.certificates[0].issue_date || "",
+                    expiryDate: profile.certificates[0].expiry_date || "",
+                  }
+                : { name: "", issuer: "", issueDate: "", expiryDate: "" },
+            });
+            
+            console.log("Profile loaded successfully");
+          }
+        }
+      } catch (error) {
+        console.error("Error loading profile:", error);
+      } finally {
+        setIsLoadingProfile(false);
+      }
+    }
+
+    loadProfile();
+  }, [userId]);
+
   return (
     <div className="w-full flex flex-col items-center">
+      {isLoadingProfile ? (
+        <div className="w-full max-w-3xl flex items-center justify-center py-12">
+          <div className="text-center">
+            <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            <p className="mt-2 text-sm text-muted-foreground">Loading your profile...</p>
+          </div>
+        </div>
+      ) : (
       <div className="w-full max-w-3xl">
         {/* Global Autofill Button */}
         <div className="w-full flex items-center justify-center mb-4">
@@ -792,14 +960,16 @@ export default function MultiStepResumeForm() {
             </button>
           ) : (
             <button
-              className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:opacity-90"
+              className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:opacity-90 disabled:opacity-50"
               onClick={onSubmit}
+              disabled={isSavingProfile}
             >
-              Submit
+              {isSavingProfile ? "Saving..." : "Submit"}
             </button>
           )}
         </div>
       </div>
+      )}
     </div>
   );
 }
