@@ -179,6 +179,15 @@ def parse_skills_from_text(skills_text: str) -> List[str]:
         token = item.strip().strip('-').strip()
         if not token:
             continue
+        # Strip category label prefixes like "Languages:", "Frameworks:", "Tools:" etc.
+        # These appear as "Label: Skill1" after splitting on commas — the label is on the
+        # first token of a category line. Remove everything up to and including the colon.
+        if ':' in token:
+            # Only strip if the part before the colon looks like a short category label
+            # (no longer than 30 chars, no numbers) — avoid stripping URLs or key:value skills
+            prefix, _, remainder = token.partition(':')
+            if len(prefix.strip()) <= 30 and remainder.strip() and not any(c.isdigit() for c in prefix):
+                token = remainder.strip()
         # Remove trailing punctuation
         token = re.sub(r"[\s\-–•·]+$", "", token)
         # Collapse multiple spaces

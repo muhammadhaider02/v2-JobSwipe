@@ -3,9 +3,6 @@
 .env.*
 *.env
 
-# Markdown files
-*.md
-
 # Python virtual environment
 venv/
 env/

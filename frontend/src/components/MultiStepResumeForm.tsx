@@ -54,9 +54,9 @@ type FormState = {
 
 const steps = [
   { id: 1, label: "Profile" },
-  { id: 2, label: "Projects" },
-  { id: 3, label: "Certificates" },
-  { id: 4, label: "Skills" },
+  { id: 2, label: "Certificates" },
+  { id: 3, label: "Skills" },
+  { id: 4, label: "Projects" },
   { id: 5, label: "Education" },
   { id: 6, label: "Experience" },
 ];
@@ -183,7 +183,7 @@ export default function MultiStepResumeForm({ userId }: MultiStepResumeFormProps
     if (stepIndex === 0) {
       if (!form.profile.name.trim()) errs.name = "Name is required";
       if (!form.profile.email.trim()) errs.email = "Email is required";
-    } else if (stepIndex === 3) {
+    } else if (stepIndex === 2) {
       if (form.skills.length === 0) errs.skills = "Add at least one skill";
     } else if (stepIndex === 4) {
       if (form.education.length === 0 || !form.education[0].degree.trim())
@@ -791,8 +791,8 @@ export default function MultiStepResumeForm({ userId }: MultiStepResumeFormProps
             </div>
           )}
 
-          {/* STEP 4: SKILLS */}
-          {currentStep === 3 && (
+          {/* STEP 3: SKILLS */}
+          {currentStep === 2 && (
             <div>
               <label className="text-sm font-medium">Skills</label>
               <input
@@ -826,8 +826,8 @@ export default function MultiStepResumeForm({ userId }: MultiStepResumeFormProps
             </div>
           )}
 
-          {/* STEP 4: CERTIFICATES */}
-          {currentStep === 2 && (
+          {/* STEP 2: CERTIFICATES */}
+          {currentStep === 1 && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="text-sm font-medium">Certificate Name</label>
@@ -868,8 +868,8 @@ export default function MultiStepResumeForm({ userId }: MultiStepResumeFormProps
             </div>
           )}
 
-          {/* STEP 2: PROJECTS */}
-          {currentStep === 1 && (
+          {/* STEP 4: PROJECTS */}
+          {currentStep === 3 && (
             <div className="space-y-6">
               {form.projects.map((proj, index) => (
                 <div key={index} className="border rounded-lg p-4 relative">
@@ -1022,58 +1022,99 @@ function applyAutofill(prev: FormState, data: BackendJson): FormState {
 
   // Profile (summary + links)
   if (data.profile) {
-    next.profile.summary = data.profile.summary || next.profile.summary;
-    next.profile.github = data.profile.github || next.profile.github;
-    next.profile.linkedin = data.profile.linkedin || next.profile.linkedin;
+    next.profile.summary =
+      data.profile.summary !== undefined
+        ? data.profile.summary
+        : next.profile.summary;
+    next.profile.github =
+      data.profile.github !== undefined
+        ? data.profile.github
+        : next.profile.github;
+    next.profile.linkedin =
+      data.profile.linkedin !== undefined
+        ? data.profile.linkedin
+        : next.profile.linkedin;
     next.profile.portfolio =
-      data.profile.portfolio || next.profile.portfolio;
+      data.profile.portfolio !== undefined
+        ? data.profile.portfolio
+        : next.profile.portfolio;
   }
 
   // Education
-  if (data.education && data.education.length > 0) {
-    next.education = data.education.map((edu, idx) => {
-      const startYear = edu.duration
-        ? edu.duration.match(/(\d{4})/g)?.[0] || ""
-        : "";
-      const endYear = edu.duration
-        ? edu.duration.match(/(\d{4})/g)?.[1] || ""
-        : "";
-      return {
-        degree: edu.degree || next.education[idx]?.degree || "",
-        institution: edu.institution || next.education[idx]?.institution || "",
-        startYear: startYear || next.education[idx]?.startYear || "",
-        endYear: endYear || next.education[idx]?.endYear || "",
-        gpa: next.education[idx]?.gpa || "",
-      };
-    });
+  if (data.education !== undefined) {
+    if (data.education.length > 0) {
+      next.education = data.education.map((edu, idx) => {
+        const startYear = edu.duration
+          ? edu.duration.match(/(\d{4})/g)?.[0] || ""
+          : "";
+        const endYear = edu.duration
+          ? edu.duration.match(/(\d{4})/g)?.[1] || ""
+          : "";
+        return {
+          degree: edu.degree || next.education[idx]?.degree || "",
+          institution: edu.institution || next.education[idx]?.institution || "",
+          startYear: startYear || next.education[idx]?.startYear || "",
+          endYear: endYear || next.education[idx]?.endYear || "",
+          gpa: next.education[idx]?.gpa || "",
+        };
+      });
+    } else {
+      next.education = [
+        {
+          degree: "",
+          institution: "",
+          startYear: "",
+          endYear: "",
+          gpa: "",
+        },
+      ];
+    }
   }
 
   // Experience
-  if (data.experience && data.experience.length > 0) {
-    next.experience = data.experience.map((exp, idx) => ({
-      company: exp.company || next.experience[idx]?.company || "",
-      role: exp.role || next.experience[idx]?.role || "",
-      duration: exp.duration || next.experience[idx]?.duration || "",
-      description: exp.description || next.experience[idx]?.description || "",
-    }));
+  if (data.experience !== undefined) {
+    if (data.experience.length > 0) {
+      next.experience = data.experience.map((exp, idx) => ({
+        company: exp.company || next.experience[idx]?.company || "",
+        role: exp.role || next.experience[idx]?.role || "",
+        duration: exp.duration || next.experience[idx]?.duration || "",
+        description: exp.description || next.experience[idx]?.description || "",
+      }));
+    } else {
+      next.experience = [
+        {
+          company: "",
+          role: "",
+          duration: "",
+          description: "",
+        },
+      ];
+    }
   }
 
-  // Projects: keep existing link if new data doesn't specify one
-  if (data.projects && data.projects.length > 0) {
-    next.projects = data.projects.map((proj, idx) => ({
-      name: proj.name || next.projects[idx]?.name || "",
-      description:
-        proj.description || next.projects[idx]?.description || "",
-      link:
-        proj.link !== undefined
-          ? proj.link
-          : next.projects[idx]?.link || "",
-    }));
+  // Projects: REPLACE when data.projects is defined.
+  // Empty array (from immediate upload response) resets the form so old resume's
+  // projects don't persist while the Projects LLM is still processing.
+  if (data.projects !== undefined) {
+    if (data.projects.length > 0) {
+      next.projects = data.projects.map((proj, idx) => ({
+        name: proj.name || next.projects[idx]?.name || "",
+        description:
+          proj.description || next.projects[idx]?.description || "",
+        link:
+          proj.link !== undefined
+            ? proj.link
+            : next.projects[idx]?.link || "",
+      }));
+    } else {
+      // Empty array = new upload started, clear stale projects
+      next.projects = [{ name: "", description: "", link: "" }];
+    }
   }
 
-  // Skills
+  // Skills: REPLACE entirely with what came from the resume (never merge with stale data)
   if (data.skills && data.skills.length) {
-    next.skills = Array.from(new Set([...(next.skills || []), ...data.skills]));
+    next.skills = [...data.skills];
   }
 
   return next;
@@ -1093,8 +1134,15 @@ function ResumeAutofillButton({
   const [skillEnrichmentStatus, setSkillEnrichmentStatus] = useState<
     "idle" | "polling" | "completed" | "failed"
   >("idle");
+  const [projectLlmStatus, setProjectLlmStatus] = useState<
+    "idle" | "polling" | "completed" | "failed"
+  >("idle");
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const jobIdRef = useRef<string | null>(null);
+  // Track terminal state via refs to avoid stale closure reads inside poll
+  const llmDoneRef = useRef(false);
+  const skillDoneRef = useRef(false);
+  const projectDoneRef = useRef(false);
 
   useEffect(() => {
     return () => {
@@ -1115,6 +1163,7 @@ function ResumeAutofillButton({
           if (res.status === 404) {
             setLlmStatus("failed");
             setSkillEnrichmentStatus("failed");
+            setProjectLlmStatus("failed");
             setError("Job not found");
             if (pollingIntervalRef.current)
               clearInterval(pollingIntervalRef.current);
@@ -1125,41 +1174,83 @@ function ResumeAutofillButton({
 
         const data = await res.json();
 
+        // Helper: stop polling only when ALL THREE tasks have finished
+        const stopIfAllDone = () => {
+          if (llmDoneRef.current && skillDoneRef.current && projectDoneRef.current) {
+            if (pollingIntervalRef.current) {
+              clearInterval(pollingIntervalRef.current);
+            }
+          }
+        };
+
         // Check skill enrichment status
         if (data.skill_enrichment) {
-          if (data.skill_enrichment.status === "completed" && skillEnrichmentStatus !== "completed") {
+          if (data.skill_enrichment.status === "completed" && !skillDoneRef.current) {
+            skillDoneRef.current = true;
             setSkillEnrichmentStatus("completed");
             if (data.skill_enrichment.skills) {
-              // Update skills with enriched skills
               onAutofill({ skills: data.skill_enrichment.skills });
             }
-          } else if (data.skill_enrichment.status === "failed") {
+            stopIfAllDone();
+          } else if (data.skill_enrichment.status === "failed" && !skillDoneRef.current) {
+            skillDoneRef.current = true;
             setSkillEnrichmentStatus("failed");
+            stopIfAllDone();
           }
         }
 
-        // Check LLM status
-        if (data.status === "completed") {
-          setLlmStatus("completed");
-          if (pollingIntervalRef.current)
-            clearInterval(pollingIntervalRef.current);
+        // Check Projects LLM status
+        if (data.project_llm) {
+          if (data.project_llm.status === "completed" && !projectDoneRef.current) {
+            projectDoneRef.current = true;
+            setProjectLlmStatus("completed");
+            if (data.project_llm.projects) {
+              onAutofill({ projects: data.project_llm.projects });
+            }
+            stopIfAllDone();
+          } else if (data.project_llm.status === "failed" && !projectDoneRef.current) {
+            projectDoneRef.current = true;
+            setProjectLlmStatus("failed");
+            stopIfAllDone();
+          }
+        }
 
+        // Check Education+Experience LLM status
+        if (data.status === "completed" && !llmDoneRef.current) {
+          llmDoneRef.current = true;
+          setLlmStatus("completed");
           if (data.result) {
             onAutofill(data.result);
           }
-        } else if (data.status === "failed") {
+          stopIfAllDone();
+        } else if (data.status === "failed" && !llmDoneRef.current) {
+          llmDoneRef.current = true;
           setLlmStatus("failed");
-          setError(data.error || "LLM processing failed");
-          if (pollingIntervalRef.current)
-            clearInterval(pollingIntervalRef.current);
+          
+          let errMessage = data.error || "LLM processing failed";
+          // Present a cleaner message to the user for common API errors
+          if (errMessage.includes("429") || errMessage.includes("TOO MANY REQUESTS")) {
+            errMessage = "Server limits reached (Too Many Requests). Please try uploading again in a minute.";
+          } else if (errMessage.includes("500") || errMessage.includes("INTERNAL SERVER ERROR")) {
+            errMessage = "Server encountered a temporary error. Please try uploading again.";
+          } else if (errMessage.length > 100) {
+            errMessage = errMessage.substring(0, 100) + "..."; // prevent breaking UI layout
+          }
+          
+          setError(errMessage);
+          stopIfAllDone();
         }
       } catch (err: any) {
         console.error("Polling error:", err);
       }
     };
 
+    llmDoneRef.current = false;
+    skillDoneRef.current = false;
+    projectDoneRef.current = false;
     setLlmStatus("polling");
     setSkillEnrichmentStatus("polling");
+    setProjectLlmStatus("polling");
     pollingIntervalRef.current = setInterval(poll, 2000);
     poll();
   }
@@ -1171,6 +1262,7 @@ function ResumeAutofillButton({
     setError(null);
     setLlmStatus("idle");
     setSkillEnrichmentStatus("idle");
+    setProjectLlmStatus("idle");
 
     if (pollingIntervalRef.current) {
       clearInterval(pollingIntervalRef.current);
@@ -1207,9 +1299,10 @@ function ResumeAutofillButton({
   const getButtonText = () => {
     if (loading) return "Uploading...";
     if (skillEnrichmentStatus === "polling") return "Processing Skills...";
+    if (projectLlmStatus === "polling") return "Processing Projects...";
     if (llmStatus === "polling") return "Processing Education & Experience...";
+    if (llmStatus === "failed" || projectLlmStatus === "failed") return "⚠ Autofill (partial)";
     if (llmStatus === "completed") return "✓ Autofill Complete";
-    if (llmStatus === "failed") return "⚠ Autofill (partial)";
     return "Autofill from Resume";
   };
 
@@ -1233,7 +1326,13 @@ function ResumeAutofillButton({
         </button>
       </div>
 
+      {projectLlmStatus === "failed" && (
+        <span className="text-xs text-amber-600">
+          ⚠ Projects could not be extracted (resume may have too many). Please add them manually.
+        </span>
+      )}
       {error && <span className="text-xs text-red-600">{error}</span>}
     </div>
+
   );
 }

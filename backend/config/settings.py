@@ -35,11 +35,11 @@ class Settings(BaseSettings):
     # SambaNova LLM Configuration
     sambanova_api_key: str = Field(default="", description="SambaNova API key")
     sambanova_base_url: str = Field(default="https://api.sambanova.ai/v1", description="SambaNova API base URL")
-    sambanova_model: str = Field(default="meta-llama/Meta-Llama-3.1-8B-Instruct", description="LLM model name")
+    sambanova_model: str = Field(default="Meta-Llama-3.1-8B-Instruct", description="LLM model name")
     
     # Rate Limiting
-    rate_limit_calls_per_minute: int = Field(default=10, description="Max LLM calls per minute")
-    rate_limit_cooldown_seconds: float = Field(default=6.0, description="Cooldown between LLM calls")
+    rate_limit_calls_per_minute: int = Field(default=15, description="Max LLM calls per minute")
+    rate_limit_cooldown_seconds: float = Field(default=4.0, description="Cooldown between LLM calls")
     
     # Scrapling Configuration
     scrapling_cache_dir: str = Field(default="./scrapling_cache", description="Scrapling checkpoint directory")

@@ -1,8 +1,12 @@
 """
 Vetting Officer Node: Intelligent job matching with multi-factor scoring.
 
-Scores and filters jobs based on Title Similarity (35%), Skill Match (25%), 
-Quiz Score (20%), Experience Alignment (15%), and Location Fit (5%).
+Scores and filters jobs based on:
+  Skill Match (35%)          - User's skills vs job's required skills
+  Query Match (25%)          - Semantic match between user's search query and job title
+  Experience Alignment (20%) - User's years/seniority vs job requirements
+  Location Fit (15%)         - City match or remote
+  Title Similarity (5%)      - Past job titles vs job title
 """
 
 import re
@@ -10,17 +14,17 @@ import numpy as np
 from typing import Dict, Any, List, Optional, Tuple
 from sentence_transformers import SentenceTransformer
 from agents.state import AgentState, VettedJob
-from services import get_supabase_service, get_llm_service
+from services import get_supabase_service
 from langchain_core.messages import AIMessage
 
 
 # Scoring weights (must sum to 1.0)
 WEIGHTS = {
-    "title_similarity": 0.35,
-    "skill_match": 0.25,
-    "quiz_score": 0.20,
-    "experience_alignment": 0.15,
-    "location_fit": 0.05
+    "skill_match": 0.35,
+    "query_match": 0.25,
+    "experience_alignment": 0.20,
+    "location_fit": 0.15,
+    "title_similarity": 0.05,
 }
 
 # Minimum score threshold for jobs to pass vetting
@@ -120,6 +124,29 @@ def extract_user_titles(profile: Dict[str, Any]) -> List[str]:
     titles = list(set([t.strip() for t in titles if t and t.strip()]))
     
     return titles
+
+
+def calculate_query_match(search_query: str, job_title: str) -> float:
+    """
+    Semantic similarity between the user's search query and the job title.
+
+    This is the primary signal — if the user typed "Backend Developer",
+    jobs titled "Backend Developer" or "Backend Engineer" should score high.
+
+    Returns:
+        Similarity score (0.0 to 1.0)
+    """
+    if not search_query or not job_title:
+        return 0.0
+    try:
+        model = get_embedding_model()
+        embeddings = model.encode([search_query, job_title], normalize_embeddings=True)
+        similarity = float(embeddings[0] @ embeddings[1])
+        # Clamp to [0, 1]
+        return max(0.0, min(1.0, similarity))
+    except Exception as e:
+        print(f"Query match error: {e}")
+        return 0.0
 
 
 def calculate_title_similarity(user_titles: List[str], job_title: str) -> float:
@@ -247,7 +274,9 @@ def calculate_quiz_score(quiz_scores: List[Dict], job_skills: List[str]) -> floa
         Quiz score (0.0 to 1.0)
     """
     if not quiz_scores or not job_skills:
-        return 0.0
+        # No quiz history — return neutral score rather than penalizing with 0.
+        # Users who DO take quizzes will score above 0.75, giving them a real advantage.
+        return 0.75
     
     try:
         # Normalize job skills for matching
@@ -425,84 +454,50 @@ def calculate_final_score(scores: Dict[str, float]) -> float:
     return final_score
 
 
-def generate_reasoning(job: Dict[str, Any], user_profile: Dict[str, Any], 
-                      scores: Dict[str, float], matching_skills: List[str], 
-                      skill_gaps: List[str]) -> str:
+def _build_reasoning(final_score: float, matching_skills: List[str], 
+                     skill_gaps: List[str], user_profile: Dict[str, Any]) -> str:
+    """Build a fast template-based reasoning string. No LLM calls."""
+    if final_score >= 0.75:
+        strength = "strong match"
+    elif final_score >= 0.60:
+        strength = "moderate match"
+    else:
+        strength = "potential opportunity"
+
+    gap_text = ""
+    if skill_gaps:
+        gap_text = f" You'll need to develop {', '.join(skill_gaps[:3])}."
+
+    skills_text = ', '.join(matching_skills[:3]) if matching_skills else "your background"
+    roles_text = ', '.join(user_profile.get('previous_roles', ['your field'])[:2])
+    return f"This role is a {strength} based on your {skills_text} experience.{gap_text} Your background in {roles_text} aligns well with the requirements."
+
+
+def _compute_years_from_experience(experience: list) -> int:
     """
-    Generate LLM-based reasoning for job match.
-    
-    Args:
-        job: Job data dictionary
-        user_profile: User profile dictionary
-        scores: Score breakdown dictionary
-        matching_skills: List of matched skills
-        skill_gaps: List of missing skills
-        
-    Returns:
-        2-3 sentence reasoning string
+    Estimate years of experience from the experience array.
+
+    Parses year ranges like "Sep 2024 - Oct 2024" or "2022 - 2025".
+    Falls back to counting each entry as 1 year if no years found.
+    Caps at 40 to prevent corrupt data from inflating the score.
     """
-    try:
-        llm = get_llm_service()
-        
-        # Build prompt for LLM
-        final_score = calculate_final_score(scores)
-        
-        prompt = f"""You are a career advisor analyzing job fit. Generate a 2-3 sentence explanation of why this job is a good match for the candidate.
-
-Job Title: {job.get('title', 'Unknown')}
-Company: {job.get('company', 'Unknown')}
-Required Skills: {', '.join(job.get('skills', [])[:10])}
-
-Candidate Profile:
-- Previous Roles: {', '.join(user_profile.get('previous_roles', [])[:3])}
-- Skills: {', '.join(user_profile.get('skills', [])[:15])}
-- Years of Experience: {user_profile.get('years_of_experience', 0)}
-- Location: {user_profile.get('location', 'Unknown')}
-
-Match Analysis:
-- Overall Score: {final_score:.1%}
-- Title Similarity: {scores['title_similarity']:.1%}
-- Skill Match: {scores['skill_match']:.1%}
-- Quiz Performance: {scores['quiz_score']:.1%}
-- Experience Fit: {scores['experience_alignment']:.1%}
-- Location Fit: {scores['location_fit']:.1%}
-- Matching Skills: {', '.join(matching_skills[:8])}
-- Skill Gaps: {', '.join(skill_gaps[:5])}
-
-Generate a concise 2-3 sentence explanation focusing on the candidate's strengths that make them suitable for this role, and briefly mention any gaps. Be specific and reference actual skills."""
-
-        response = llm.generate_text(
-            prompt=prompt,
-            temperature=0.7,
-            max_tokens=200
-        )
-        
-        reasoning = response.get("content", "").strip()
-        
-        # Fallback if LLM fails
-        if not reasoning:
-            raise ValueError("Empty LLM response")
-        
-        return reasoning
-    
-    except Exception as e:
-        print(f"LLM reasoning generation failed: {e}")
-        
-        # Fallback to template-based reasoning
-        final_score = calculate_final_score(scores)
-        
-        if final_score >= 0.75:
-            strength = "strong match"
-        elif final_score >= 0.60:
-            strength = "moderate match"
-        else:
-            strength = "potential opportunity"
-        
-        gap_text = ""
-        if skill_gaps:
-            gap_text = f" You'll need to develop {', '.join(skill_gaps[:3])}."
-        
-        return f"This role is a {strength} based on your {', '.join(matching_skills[:3])} experience.{gap_text} Your background in {', '.join(user_profile.get('previous_roles', ['your field'])[:2])} aligns well with the requirements."
+    import re
+    total_years = 0
+    for entry in (experience or []):
+        if not isinstance(entry, dict):
+            continue
+        duration = str(entry.get("duration", "") or "")
+        years = re.findall(r"\b(20\d{2}|19\d{2})\b", duration)
+        if len(years) >= 2:
+            try:
+                total_years += abs(int(years[-1]) - int(years[0]))
+                continue
+            except ValueError:
+                pass
+        # Fallback: count the entry as 1 year
+        if duration.strip():
+            total_years += 1
+    return min(total_years, 10)
 
 
 def vetting_officer_node(state: AgentState) -> Dict[str, Any]:
@@ -535,6 +530,7 @@ def vetting_officer_node(state: AgentState) -> Dict[str, Any]:
     # Extract state data
     user_id = state.get("user_id", "")
     raw_jobs = state.get("raw_job_list", [])
+    search_query = state.get("search_query", "")
     
     if not user_id:
         error_msg = "No user_id provided for vetting"
@@ -575,7 +571,9 @@ def vetting_officer_node(state: AgentState) -> Dict[str, Any]:
     # Extract user data for scoring
     user_titles = extract_user_titles(user_profile)
     user_skills = user_profile.get("skills", [])
-    user_years = user_profile.get("years_of_experience", 0)
+    # Derive years from experience entries — the stored years_of_experience column
+    # can contain corrupt values (e.g. 4049). Count distinct years from durations instead.
+    user_years = _compute_years_from_experience(user_profile.get("experience", []))
     user_location = user_profile.get("location", "")
     quiz_scores = user_profile.get("quiz_scores", [])
     
@@ -588,9 +586,9 @@ def vetting_officer_node(state: AgentState) -> Dict[str, Any]:
             user_latest_title = latest_exp.get("job_title") or latest_exp.get("title", "")
     
     print(f"Scoring jobs with 5-factor analysis...")
-    print(f"   Weights: Title={WEIGHTS['title_similarity']:.0%}, Skill={WEIGHTS['skill_match']:.0%}, "
-          f"Quiz={WEIGHTS['quiz_score']:.0%}, Exp={WEIGHTS['experience_alignment']:.0%}, "
-          f"Location={WEIGHTS['location_fit']:.0%}\n")
+    print(f"   Weights: Query={WEIGHTS['query_match']:.0%}, Exp={WEIGHTS['experience_alignment']:.0%}, "
+          f"Location={WEIGHTS['location_fit']:.0%}, Title={WEIGHTS['title_similarity']:.0%}, "
+          f"Skill={WEIGHTS['skill_match']:.0%}\n")
     
     vetted_jobs = []
     filtered_count = 0
@@ -600,7 +598,10 @@ def vetting_officer_node(state: AgentState) -> Dict[str, Any]:
         for idx, job in enumerate(raw_jobs, 1):
             job_title = job.get("title", "")
             job_skills = job.get("skills", [])
-            job_experience = job.get("experience_required")
+            # DB stores experience_required as int (e.g. 3) but calculate_experience_alignment
+            # expects a string — cast safely
+            raw_exp = job.get("experience_required")
+            job_experience = str(raw_exp) if raw_exp is not None else None
             job_location = job.get("location", "")
             job_type = job.get("employment_type")
             
@@ -612,19 +613,19 @@ def vetting_officer_node(state: AgentState) -> Dict[str, Any]:
                 continue
             
             # Calculate individual scores
+            query_score = calculate_query_match(search_query, job_title)
             title_score = calculate_title_similarity(user_titles, job_title)
             skill_score, matching_skills, skill_gaps = calculate_skill_match(user_skills, job_skills)
-            quiz_score = calculate_quiz_score(quiz_scores, job_skills)
             experience_score = calculate_experience_alignment(user_years, user_latest_title, job_experience)
             location_score = calculate_location_fit(user_location, job_location, job_type)
-            
+
             # Build score breakdown
             scores = {
+                "query_match": query_score,
                 "title_similarity": title_score,
                 "skill_match": skill_score,
-                "quiz_score": quiz_score,
                 "experience_alignment": experience_score,
-                "location_fit": location_score
+                "location_fit": location_score,
             }
             
             # Calculate final weighted score
@@ -636,8 +637,8 @@ def vetting_officer_node(state: AgentState) -> Dict[str, Any]:
                 filtered_count += 1
                 continue
             
-            # Generate reasoning
-            reasoning = generate_reasoning(job, user_profile, scores, matching_skills, skill_gaps)
+            # Build reasoning (template-based, no LLM call)
+            reasoning = _build_reasoning(final_score, matching_skills, skill_gaps, user_profile)
             
             # Determine confidence level
             if final_score >= 0.75:

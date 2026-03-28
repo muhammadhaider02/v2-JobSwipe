@@ -1,1 +1,1 @@
-JobSwipe 2025
+JobSwipe 2026

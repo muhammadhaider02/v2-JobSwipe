@@ -16,21 +16,32 @@ SCHEMA: Dict[str, Any] = {
 
 
 SYSTEM_PROMPT = (
-    "You are an expert information extraction system that converts raw resume text into a standardized JSON format.\n"
-    "You will receive ONLY the Education and Experience sections from a resume.\n\n"
-    "CRITICAL REQUIREMENTS:\n"
-    "- Extract ALL fields for EVERY entry. Missing fields will cause data loss.\n"
-    "- For Experience entries, the 'description' field is MANDATORY - extract the FULL job description/responsibilities.\n"
-    "- For Experience entries, 'company', 'role', and 'duration' are REQUIRED - never leave them empty if present in text.\n"
-    "- If a field is truly not present in the input text, only then leave it as an empty string.\n"
-    "- Never fabricate data such as companies, roles, degrees, or dates that are not present in the input.\n"
-    "- Preserve the JSON structure exactly as defined below.\n"
-    "- Output ONLY a single top-level JSON value matching the schema (no prose, no markdown, no extra characters before or after).\n\n"
-    "Schema:\n"
-    + json.dumps(SCHEMA, indent=2) +
-    "\n\nREMEMBER: Extract COMPLETE information for each experience entry, especially the description field."
-)
+    "You are a precise resume data extraction AI. Your output must be valid JSON matching the schema below.\n\n"
 
+    "STEP 1 — INTERNAL SCRATCHPAD (mandatory before writing any JSON):\n"
+    "PDF extraction scrambles multi-column layouts. Follow this exact process:\n"
+    "  A. Extract every (job title, company) pair IN ORDER of appearance.\n"
+    "  B. Extract every (date range, location) pair IN ORDER of appearance.\n"
+    "     CRITICAL: Date and location are ALWAYS paired together in the PDF column. Extract them as a unit, never separately.\n"
+    "     Example unit: ('Feb 2025 - Jul 2025', 'Islamabad, Pakistan')\n"
+    "  C. Match sequentially: 1st job pair → 1st date/location unit, 2nd job pair → 2nd unit, etc.\n"
+    "  D. Before writing JSON, list your matches explicitly:\n"
+    "     Job 1: [title] at [company] | [date] | [location]\n"
+    "     Job 2: [title] at [company] | [date] | [location]\n"
+    "     ...and so on.\n"
+    "  E. Check: does any (date, location) unit appear more than once in your list? If yes, you have a mapping error. Fix it before proceeding.\n\n"
+
+    "HARD RULES:\n"
+    "1. DATE AND LOCATION ARE A UNIT: Never assign a date from one (date, location) pair with the location from a different pair. They travel together.\n"
+    "2. ONE ENTRY PER JOB: Same company appearing twice in output is always wrong.\n"
+    "3. NO DATE COPYING: Same date range assigned to two different jobs is always wrong.\n"
+    "4. NO GHOST ENTRIES: No experience entry without a matching job title.\n"
+    "5. NO FABRICATION: Missing fields get an empty string.\n"
+    "6. OUTPUT FORMAT: Valid JSON only. No markdown, no commentary.\n\n"
+
+    "Schema:\n"
+    + json.dumps(SCHEMA, indent=2)
+)
 
 def build_user_prompt(resume_text: str) -> str:
     prompt = (
@@ -191,9 +202,9 @@ class LlamaRefiner:
             "llama3:8b-instruct-q4_K_M" if backend == "ollama" else ""
         )
         self.base_url = base_url or (
-            ("http://localhost:11434" if backend == "ollama" else "http://localhost:11434/v1")
+            (("http://localhost:11434" if backend == "ollama" else "http://localhost:11434/v1")
             if backend in {"ollama", "openai_compat"}
-            else "http://localhost:1234/v1"
+            else "http://localhost:1234/v1")
         )
         self.temperature = temperature
         self.max_new_tokens = max_new_tokens
@@ -249,6 +260,20 @@ class LlamaRefiner:
             only_key = next(iter(SCHEMA.keys()))
             parsed = { only_key: parsed }
         normalized = _deep_merge_schema(SCHEMA, parsed)
+
+        # Post-process: remove ghost entries — entries where the LLM extracted a stray
+        # date range but left company+role (or institution+degree) both empty.
+        exp_list = normalized.get("experience", [])
+        normalized["experience"] = [
+            e for e in exp_list
+            if (e.get("company", "").strip() or e.get("role", "").strip())
+        ]
+        edu_list = normalized.get("education", [])
+        normalized["education"] = [
+            e for e in edu_list
+            if (e.get("institution", "").strip() or e.get("degree", "").strip())
+        ]
+
         return normalized
 
     # --- Backends ---
@@ -259,8 +284,8 @@ class LlamaRefiner:
 
         headers = {
             "Content-Type": "application/json",
-            # LM Studio/Ollama usually ignore auth; keep optional support
-            "Authorization": f"Bearer {os.environ.get('OPENAI_API_KEY', 'sk-no-key')}",
+            # Use SambaNova key if set, otherwise fall back to OPENAI_API_KEY
+            "Authorization": f"Bearer {os.environ.get('SAMBANOVA_API_KEY') or os.environ.get('OPENAI_API_KEY', 'sk-no-key')}",
         }
 
         payload: Dict[str, Any] = {
@@ -282,14 +307,47 @@ class LlamaRefiner:
         except Exception:
             pass
 
-        resp = requests.post(url, headers=headers, json=payload, timeout=self.request_timeout_s)
-        if resp.status_code == 404 and "11434" in self.base_url:
-            # Likely talking to Ollama without OpenAI proxy; fallback to native API
-            return self._call_ollama_native(messages)
-        resp.raise_for_status()
-        data = resp.json()
-        text = data["choices"][0]["message"]["content"]
-        return text
+        max_attempts = 5
+        last_resp = None
+        current_payload = payload
+
+        for attempt in range(1, max_attempts + 1):
+            resp = requests.post(url, headers=headers, json=current_payload, timeout=self.request_timeout_s)
+            last_resp = resp
+
+            if resp.status_code == 404 and "11434" in self.base_url:
+                return self._call_ollama_native(messages)
+
+            if resp.status_code == 400 and "response_format" in current_payload:
+                print("[LLM] 400 with response_format — retrying without it", flush=True)
+                current_payload = {k: v for k, v in current_payload.items() if k != "response_format"}
+                resp = requests.post(url, headers=headers, json=current_payload, timeout=self.request_timeout_s)
+                last_resp = resp
+
+            if resp.status_code == 429:
+                delay = attempt * 3  # 3s, 6s, 9s, 12s delay
+                print(f"[LLM] 429 Too Many Requests (attempt {attempt}/{max_attempts}) — retrying in {delay}s", flush=True)
+                if attempt < max_attempts:
+                    time.sleep(delay)
+                continue
+
+            if resp.status_code >= 500:
+                print(f"[LLM] {resp.status_code} server error (attempt {attempt}/{max_attempts}) — retrying in 2s", flush=True)
+                if attempt < max_attempts:
+                    time.sleep(2)
+                continue
+
+            resp.raise_for_status()
+            data = resp.json()
+            if "choices" not in data:
+                raise RuntimeError(
+                    f"Unexpected API response (no 'choices'): {str(data)[:300]}"
+                )
+            return data["choices"][0]["message"]["content"]
+
+        # All retries exhausted — raise the last response error
+        last_resp.raise_for_status()
+
 
     def _call_ollama_native(self, messages: List[Dict[str, str]]) -> str:
         import requests
@@ -456,7 +514,7 @@ class LlamaRefiner:
         return text.split("</s>")[-1].strip()
 
 
-# Convenience functional API
+# Convenience functional API — Education + Experience
 def refine_resume(
     resume_text: str,
     backend: str = "ollama",
@@ -475,3 +533,114 @@ def refine_resume(
         request_timeout_s=request_timeout_s,
     )
     return ref.refine_resume(resume_text)
+
+
+# ─────────────────────────────────────────────────────────────
+# PROJECTS — separate schema, prompt, and convenience function
+# ─────────────────────────────────────────────────────────────
+
+PROJECTS_SCHEMA: Dict[str, Any] = {
+    "projects": [
+        {"name": "", "description": "", "link": ""}
+    ]
+}
+
+PROJECTS_SYSTEM_PROMPT = (
+    "You are an expert information extraction system that converts raw resume text into a standardized JSON format.\n"
+    "You will receive ONLY the Projects section from a resume.\n\n"
+    "CRITICAL REQUIREMENTS:\n"
+    "- Extract EVERY project listed. Do not skip any.\n"
+    "- 'name' is REQUIRED — the project title.\n"
+    "- 'description' is REQUIRED — a concise summary of what the project does/did. Preserve technical details.\n"
+    "- 'link' is OPTIONAL — only fill if a URL (GitHub, live demo, etc.) is explicitly present next to this project. Leave empty string otherwise.\n"
+    "- Never fabricate project names, descriptions, or links not present in the input.\n"
+    "- Output ONLY a single top-level JSON value matching the schema (no prose, no markdown, no extra characters).\n\n"
+    "Schema:\n"
+    + json.dumps(PROJECTS_SCHEMA, indent=2) +
+    "\n\nREMEMBER: Extract ALL projects with complete name and description."
+)
+
+
+def _build_projects_user_prompt(projects_text: str) -> str:
+    return (
+        "Projects Section Text:\n====\n"
+        f"{projects_text}\n"
+        "====\n\n"
+        "Return ONLY the JSON strictly following the schema above.\n"
+        "Ensure the JSON is syntactically valid and contains no commentary or markdown formatting."
+    )
+
+
+def refine_projects(
+    projects_text: str,
+    backend: str = "ollama",
+    model: Optional[str] = "llama3:8b-instruct-q4_K_M",
+    base_url: Optional[str] = "http://localhost:11434",
+    temperature: float = 0.1,
+    max_new_tokens: int = 1200,
+    request_timeout_s: float = 300.0,
+) -> List[Dict[str, str]]:
+    """
+    Extract structured project entries from the Projects section text.
+    Returns a list of {name, description, link} dicts.
+    """
+    if not projects_text or not projects_text.strip():
+        return []
+
+    # Cap input to avoid exceeding SambaNova's context/response_format limits.
+    # 4000 chars covers ~10-15 projects comfortably.
+    PROJECTS_CHAR_LIMIT = 4000
+    if len(projects_text) > PROJECTS_CHAR_LIMIT:
+        print(
+            f"[PROJECTS LLM] Projects text truncated from {len(projects_text)} "
+            f"to {PROJECTS_CHAR_LIMIT} chars to stay within API limits.",
+            flush=True,
+        )
+        projects_text = projects_text[:PROJECTS_CHAR_LIMIT]
+
+    ref = LlamaRefiner(
+        backend=backend,
+        model=model,
+        base_url=base_url,
+        temperature=temperature,
+        max_new_tokens=2000,
+        request_timeout_s=request_timeout_s,
+    )
+
+    messages = [
+        {"role": "system", "content": PROJECTS_SYSTEM_PROMPT},
+        {"role": "user", "content": _build_projects_user_prompt(projects_text)},
+    ]
+
+    print("\n==== [PROJECTS LLM] Sending request ====", flush=True)
+
+    if ref.backend in {"lmstudio", "openai_compat"}:
+        raw = ref._call_openai_compatible(messages)
+    elif ref.backend == "ollama":
+        try:
+            raw = ref._call_ollama_native(messages)
+        except Exception:
+            raw = ref._call_openai_compatible(messages)
+    else:
+        raise ValueError(f"Unsupported backend: {ref.backend}")
+
+    print("\n==== [PROJECTS LLM] Raw output ====", flush=True)
+    print(raw[:3000] + ("... [truncated]" if len(raw) > 3000 else ""), flush=True)
+
+    try:
+        parsed = _extract_json(raw)
+    except Exception as e:
+        raise RuntimeError(f"Projects LLM did not return valid JSON: {e}\nRaw: {raw[:300]}")
+
+    # Normalise
+    if isinstance(parsed, list):
+        parsed = {"projects": parsed}
+    normalized = _deep_merge_schema(PROJECTS_SCHEMA, parsed)
+
+    # Strip ghost entries (no name and no description)
+    projects = normalized.get("projects", [])
+    projects = [
+        p for p in projects
+        if (p.get("name", "").strip() or p.get("description", "").strip())
+    ]
+    return projects

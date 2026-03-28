@@ -10,10 +10,9 @@ from docx import Document
 from utils.section_splitter import (
     split_resume_into_sections,
     print_sections,
-    parse_projects_from_text,
     parse_skills_from_text,
 )
-from src.llama_refiner import refine_resume
+from src.llama_refiner import refine_resume, refine_projects
 from src.updated_query import suggest_roles as get_role_recommendations
 from src.skill_gap_analysis import analyze_skill_gap
 from src.skill_enrichment import enrich_skills
@@ -130,13 +129,20 @@ def _load_db_jobs_for_vetting(search_query: str, max_candidates: int = 250) -> L
         relevance = _score_query_relevance(job, tokens)
         scored.append((relevance, job))
 
-    # Keep jobs that match query terms; fallback to all if query is too strict.
-    matched = [job for relevance, job in scored if relevance > 0]
-    if matched:
-        scored = [(r, j) for r, j in scored if r > 0]
+    # Always include remote jobs regardless of query relevance — they apply to everyone.
+    # For non-remote jobs, only keep those that have at least one query token match.
+    def is_remote(job: Dict[str, Any]) -> bool:
+        loc = str(job.get("location") or "").lower()
+        job_type = str(job.get("employment_type") or "").lower()
+        return "remote" in loc or "remote" in job_type
 
-    scored.sort(key=lambda item: item[0], reverse=True)
-    return [job for _, job in scored]
+    matched = [(r, j) for r, j in scored if r > 0 or is_remote(j)]
+    # If no matches at all (very strict query), fall back to all jobs
+    if not matched:
+        matched = scored
+
+    matched.sort(key=lambda item: item[0], reverse=True)
+    return [job for _, job in matched]
 
 
 def extract_text_from_file(path: str) -> str:
@@ -463,22 +469,14 @@ def upload_resume():
     summary_text = summary_text.replace("\r\n", "\n").replace("\r", "\n")
     summary_text = re.sub(r"\s*\n+\s*", " ", summary_text).strip()
 
-    # Parse projects and skills
+    # Parse skills (immediate)
     try:
-        parsed_projects = parse_projects_from_text(sections.get("Projects", ""))
         parsed_skills = parse_skills_from_text(sections.get("Skills", ""))
     except Exception as e:
-        parsed_projects = []
         parsed_skills = []
-        print(f"Error parsing projects/skills: {e}")
+        print(f"Error parsing skills: {e}")
 
-    # --- NEW: attach GitHub repo links to projects ---
-    project_links = extract_project_links(urls, text)
-    for idx, proj in enumerate(parsed_projects):
-        link = project_links[idx] if idx < len(project_links) else ""
-        proj["link"] = link
-
-    # Immediate JSON response (return parsed_skills, not enriched)
+    # Immediate JSON response (skills only — no regex projects)
     immediate_response = {
         "contact_info": {
             "name": contact_info.get("name") or "",
@@ -492,8 +490,10 @@ def upload_resume():
             "linkedin": contact_info.get("linkedin") or "",
             "portfolio": contact_info.get("portfolio") or "",
         },
-        "skills": parsed_skills,  # Return original parsed skills immediately
-        "projects": parsed_projects,
+        "skills": parsed_skills,
+        "projects": [],
+        "education": [],
+        "experience": []
     }
 
     # Generate job ID for LLM processing
@@ -507,6 +507,11 @@ def upload_resume():
         "skill_enrichment": {
             "status": "processing",
             "skills": None,
+            "error": None,
+        },
+        "project_llm": {
+            "status": "processing",
+            "projects": None,
             "error": None,
         },
     }
@@ -535,6 +540,9 @@ def upload_resume():
 
     # Background LLM processing (education + experience)
     def process_llm_in_background():
+        import time
+        # Stagger slightly to avoid all 3 background jobs hammering the API at once
+        time.sleep(0.5)
         try:
             print(
                 f"\n==== Starting LLM Background Processing for job {job_id} ====",
@@ -550,9 +558,9 @@ def upload_resume():
                 ]
             )
 
-            backend = os.getenv("LLAMA_BACKEND", "ollama")
-            model_name = os.getenv("LLAMA_MODEL", "llama3:8b-instruct-q4_K_M")
-            base_url = os.getenv("LLAMA_BASE_URL", "http://localhost:11434")
+            backend = os.getenv("LLAMA_BACKEND", "openai_compat")
+            model_name = os.getenv("LLAMA_MODEL", "Meta-Llama-3.1-8B-Instruct")
+            base_url = os.getenv("LLAMA_BASE_URL", "https://api.sambanova.ai/v1")
 
             print("\n==== LLM CONFIG ====", flush=True)
             print(f"backend={backend}", flush=True)
@@ -589,12 +597,60 @@ def upload_resume():
             llm_jobs[job_id]["status"] = "failed"
             llm_jobs[job_id]["error"] = str(e)
 
-    # Start both background threads
+    # Background Projects LLM (parallel)
+    def process_projects_llm_in_background():
+        import time
+        # Stagger more to prevent hitting rate limit with the other two jobs
+        time.sleep(1.0)
+        try:
+            print(
+                f"\n==== Starting Projects LLM for job {job_id} ====",
+                flush=True,
+            )
+            projects_text = sections.get("Projects", "")
+            backend = os.getenv("LLAMA_BACKEND", "openai_compat")
+            model_name = os.getenv("LLAMA_MODEL", "Meta-Llama-3.1-8B-Instruct")
+            base_url = os.getenv("LLAMA_BASE_URL", "https://api.sambanova.ai/v1")
+
+            extracted_projects = refine_projects(
+                projects_text=projects_text,
+                backend=backend,
+                model=model_name,
+                base_url=base_url,
+                temperature=0.1,
+                max_new_tokens=1200,
+                request_timeout_s=300.0,
+            )
+
+            # Attempt to attach GitHub/portfolio links from PDF annotations
+            project_links = extract_project_links(urls, text)
+            for idx, proj in enumerate(extracted_projects):
+                if not proj.get("link") and idx < len(project_links):
+                    proj["link"] = project_links[idx]
+
+            llm_jobs[job_id]["project_llm"]["status"] = "completed"
+            llm_jobs[job_id]["project_llm"]["projects"] = extracted_projects
+            print(
+                f"\n==== Projects LLM COMPLETED for job {job_id} ====",
+                flush=True,
+            )
+        except Exception as e:
+            print(
+                f"\n==== Projects LLM FAILED for job {job_id}: {e} ====",
+                flush=True,
+            )
+            llm_jobs[job_id]["project_llm"]["status"] = "failed"
+            llm_jobs[job_id]["project_llm"]["error"] = str(e)
+
+    # Start all three background threads in parallel
     skill_thread = threading.Thread(target=process_skill_enrichment_in_background, daemon=True)
     skill_thread.start()
-    
+
     llm_thread = threading.Thread(target=process_llm_in_background, daemon=True)
     llm_thread.start()
+
+    projects_thread = threading.Thread(target=process_projects_llm_in_background, daemon=True)
+    projects_thread.start()
 
     # Return immediate response with job_id
     return jsonify({"job_id": job_id, **immediate_response})
@@ -621,22 +677,31 @@ def get_llm_results(job_id):
     job = llm_jobs[job_id]
     response = {"status": job["status"]}
 
-    # Include LLM results if completed
+    # Education + Experience LLM result
     if job["status"] == "completed":
         response["result"] = job["result"]
     elif job["status"] == "failed":
         response["error"] = job["error"]
-    
-    # Include skill enrichment status and results
+
+    # Skill enrichment
     skill_enrichment = job.get("skill_enrichment", {})
     response["skill_enrichment"] = {
         "status": skill_enrichment.get("status", "processing"),
     }
-    
     if skill_enrichment.get("status") == "completed":
         response["skill_enrichment"]["skills"] = skill_enrichment.get("skills", [])
     elif skill_enrichment.get("status") == "failed":
         response["skill_enrichment"]["error"] = skill_enrichment.get("error", "Unknown error")
+
+    # Projects LLM
+    project_llm = job.get("project_llm", {})
+    response["project_llm"] = {
+        "status": project_llm.get("status", "processing"),
+    }
+    if project_llm.get("status") == "completed":
+        response["project_llm"]["projects"] = project_llm.get("projects", [])
+    elif project_llm.get("status") == "failed":
+        response["project_llm"]["error"] = project_llm.get("error", "Unknown error")
 
     return jsonify(response)
 

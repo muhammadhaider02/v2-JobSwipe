@@ -160,17 +160,18 @@ def enrich_skills(resume_text: str, existing_skills: List[str]) -> List[str]:
         print("Computing embeddings for resume sentences...")
         sentence_embeddings = model.encode(sentences)
         
-        # Check each unmatched skill
-        for skill in unmatched_skills:
-            skill_embedding = model.encode([skill])
-            similarities = cosine_similarity(skill_embedding, sentence_embeddings)
-            max_similarity = similarities.max()
-            
+        # Encode ALL unmatched skills in one batch call (much faster than one at a time)
+        print("Computing embeddings for unmatched skills (batch)...")
+        skill_embeddings = model.encode(unmatched_skills, batch_size=64, show_progress_bar=False)
+        similarities_matrix = cosine_similarity(skill_embeddings, sentence_embeddings)
+
+        for i, skill in enumerate(unmatched_skills):
+            max_similarity = similarities_matrix[i].max()
             if max_similarity >= SIMILARITY_THRESHOLD:
                 discovered_skills.append(skill)
                 print(f"  ✓ Semantic match: '{skill}' (similarity: {max_similarity:.3f})")
-        
-        pass2_count = len([s for s in discovered_skills if s not in discovered_skills[:len(discovered_skills) - len(unmatched_skills)]])
+
+        pass2_count = len(discovered_skills) - len([s for s in discovered_skills if s in skills_to_check[:len(skills_to_check) - len(unmatched_skills)]])
         print(f"Pass 2 results: {pass2_count} additional skills found via semantic matching")
     
     print(f"\n==== ENRICHMENT RESULTS ====")
