@@ -6,20 +6,18 @@ import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import {
   ArrowLeft,
+  ArrowRight,
   Briefcase,
   MapPin,
   Building2,
-  Zap,
+  User,
   CheckCircle2,
-  AlertCircle,
   Loader2,
-  ChevronLeft,
-  ChevronRight,
 } from "lucide-react";
 
 const BACKEND_BASE = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
 const POLL_INTERVAL_MS = 2000;
-const REFILL_THRESHOLD = 5;
+const REFILL_THRESHOLD = 10;
 
 // Session storage keys — persist state across /jobs ↔ /jobs/[id] navigation
 const SS_CARDS = "jobs_cards";
@@ -36,6 +34,9 @@ type JobData = {
   employment_type?: string;
   job_type?: string;
   description?: string;
+  job_description?: string;
+  experience_required?: number | string;
+  skills_required?: string[];
 };
 type VettedJob = {
   job_id: string;
@@ -52,6 +53,7 @@ function getField(job: VettedJob, key: keyof JobData): string {
   const d = job.job_data;
   if (key === "title") return d?.title || d?.job_title || "";
   if (key === "employment_type") return d?.employment_type || d?.job_type || "";
+  if (key === "description") return d?.description || d?.job_description || "";
   return (d?.[key] as string) || "";
 }
 
@@ -94,22 +96,73 @@ function clearSession() {
 interface JobCardProps {
   job: VettedJob;
   animating: "left" | "right" | null;
-  onSkip: () => void;
-  onApply: () => void;
 }
 
-function JobCard({ job, animating, onSkip, onApply }: JobCardProps) {
+// ── Description renderer ──────────────────────────────────────────────────────
+// • Strips separator-only lines ("----", "______", etc.) but keeps "-" in text
+// • Renders **bold** markdown as <strong>
+function renderDescription(text: string): React.ReactNode {
+  // Strip any "show more" artifacts (case-insensitive)
+  const cleaned0 = text.replace(/show more/gi, "");
+  // Remove lines that are only dashes/underscores/spaces (3+ chars)
+  const lines = cleaned0
+    .split("\n")
+    .filter(line => !/^[-–—_\s]{3,}$/.test(line.trim()));
+
+  // Re-join and split into paragraphs
+  const paragraphs = lines
+    .join("\n")
+    .split(/\n{2,}/)
+    .map(p => p.trim())
+    .filter(Boolean);
+
+  return (
+    <>
+      {paragraphs.map((para, i) => {
+        // Parse **bold** tokens
+        const parts = para.split(/(\*\*[^*]+\*\*)/g);
+        return (
+          <p key={i} className={i > 0 ? "mt-2" : ""}>
+            {parts.map((part, j) =>
+              part.startsWith("**") && part.endsWith("**")
+                ? <strong key={j} className="text-white/80 font-semibold">{part.slice(2, -2)}</strong>
+                : <span key={j}>{part}</span>
+            )}
+          </p>
+        );
+      })}
+    </>
+  );
+}
+
+function JobCard({ job, animating }: JobCardProps) {
+  const [descExpanded, setDescExpanded] = useState(false);
+
   const title = getField(job, "title");
   const company = getField(job, "company");
   const location = getField(job, "location");
-  const industry = getField(job, "industry");
   const empType = getField(job, "employment_type");
+  const description = getField(job, "description");
+  const expRaw = job.job_data?.experience_required;
+  const experience = expRaw != null ? `${expRaw} yrs exp` : null;
   const pct = Math.round(job.match_score * 100);
 
-  const scoreBg =
-    pct >= 75
-      ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/40"
-      : "bg-amber-500/20 text-amber-400 border-amber-500/40";
+  // Build a unified ordered skills list: matching first, then gaps
+  const matchingSet = new Set((job.matching_skills || []).map(s => s.toLowerCase()));
+  // Authoritative list from job data (if available), otherwise fall back to union
+  const rawSkills = job.job_data?.skills_required ?? [
+    ...(job.matching_skills || []),
+    ...(job.skill_gaps || []),
+  ];
+
+  // Match% colour logic
+  const isHighMatch = pct >= 75;
+  // High match → bright green; lower → dimmer green
+  const matchBadgeCls = isHighMatch
+    ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/50"
+    : "bg-emerald-900/40 text-emerald-600 border-emerald-800/60";
+  // Left border brightness: bright green for high match, dimmer for lower
+  const leftBorderColor = isHighMatch ? "rgba(52,211,153,0.85)" : "rgba(52,211,153,0.3)";
 
   const slideClass =
     animating === "left" ? "translate-x-[-110%] opacity-0"
@@ -117,79 +170,117 @@ function JobCard({ job, animating, onSkip, onApply }: JobCardProps) {
         : "translate-x-0 opacity-100";
 
   return (
-    <div className={`w-full max-w-6xl bg-card border border-border rounded-2xl shadow-xl flex flex-col transition-all duration-300 ease-in-out ${slideClass}`}>
-      {/* Header */}
-      <div className="p-6 border-b border-border flex items-start justify-between gap-4">
-        <div className="flex items-center gap-4 min-w-0">
-          <div className="flex-shrink-0 w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
-            <Briefcase className="w-6 h-6 text-primary" />
+    <div
+      className={`
+        relative w-full h-[70vh] bg-[#111613] border border-white/[0.07]
+        rounded-2xl shadow-2xl flex flex-col overflow-hidden
+        transition-all duration-300 ease-in-out ${slideClass}
+      `}
+      style={{
+        borderLeft: `4px solid ${leftBorderColor}`,
+      }}
+    >
+
+      {/* ── Header ─────────────────────────────────────────────────────── */}
+      <div className="relative p-5 flex items-start justify-between gap-4">
+        {/* Icon */}
+        <div className="flex items-start gap-3 min-w-0">
+          <div className="flex-shrink-0 w-11 h-11 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center">
+            <Briefcase className="w-5 h-5 text-emerald-400/80" />
           </div>
           <div className="min-w-0">
-            <h2 className="text-xl font-bold leading-tight truncate">{title || "Untitled Role"}</h2>
-            <div className="flex flex-wrap items-center gap-3 mt-1 text-sm text-muted-foreground">
-              {company && <span className="flex items-center gap-1"><Building2 className="w-3.5 h-3.5" />{company}</span>}
-              {location && <span className="flex items-center gap-1"><MapPin className="w-3.5 h-3.5" />{location}</span>}
-              {(industry || empType) && <span>{industry}{industry && empType ? " · " : ""}{empType}</span>}
+            <h2 className="text-[17px] font-bold leading-snug text-white">{title || "Untitled Role"}</h2>
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1.5 text-[13px] text-white/50">
+              {company && (
+                <span className="flex items-center gap-1">
+                  <Building2 className="w-3.5 h-3.5" />{company}
+                </span>
+              )}
+              {company && (location || empType || experience) && <span className="opacity-40">·</span>}
+              {location && (
+                <span className="flex items-center gap-1">
+                  <MapPin className="w-3.5 h-3.5" />{location}
+                </span>
+              )}
+              {location && (empType || experience) && <span className="opacity-40">·</span>}
+              {empType && (
+                <span className="text-emerald-400/70 font-medium">{empType}</span>
+              )}
+              {empType && experience && <span className="opacity-40">·</span>}
+              {experience && (
+                <span className="flex items-center gap-1">
+                  <User className="w-3.5 h-3.5" />{experience}
+                </span>
+              )}
             </div>
           </div>
         </div>
-        <div className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-bold border ${scoreBg}`}>
-          <Zap className="w-3.5 h-3.5" />{pct}% match
+
+        {/* Match badge */}
+        <div className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[13px] font-bold border ${matchBadgeCls}`}>
+          <span className="w-1.5 h-1.5 rounded-full bg-current opacity-80" />
+          {pct}% match
         </div>
       </div>
 
-      {/* Body */}
-      <div className="p-6 flex flex-col gap-4 flex-grow">
-        {job.matching_skills?.length > 0 && (
-          <div>
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Matching Skills</p>
+      {/* ── Scrollable body \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */}
+      <div className="flex-1 overflow-y-auto scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
+
+        {/* Description */}
+        {description && (
+          <div className="px-5 pb-4">
+            <div className="relative">
+              <div
+                className="text-[13.5px] text-white/50 leading-relaxed overflow-hidden transition-all duration-300"
+                style={{ maxHeight: descExpanded ? "none" : "18em" }}
+              >
+                {renderDescription(description)}
+              </div>
+              {!descExpanded && (
+                <div className="absolute bottom-0 left-0 right-0 h-10 bg-gradient-to-t from-[#111613] to-transparent pointer-events-none" />
+              )}
+            </div>
+            <button
+              onClick={() => setDescExpanded(v => !v)}
+              className="mt-1.5 text-emerald-400/70 text-[12px] font-medium hover:text-emerald-400 transition-colors"
+            >
+              {descExpanded ? "View less..." : "View more..."}
+            </button>
+          </div>
+        )}
+
+        {/* Required Skills */}
+        {rawSkills.length > 0 && (
+          <div className="px-5 pb-5">
+            <p className="text-[10px] font-semibold text-white/30 uppercase tracking-widest mb-2.5">
+              Required Skills
+            </p>
             <div className="flex flex-wrap gap-2">
-              {job.matching_skills.map(s => (
-                <span key={s} className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-400 text-sm border border-emerald-500/20">
-                  <CheckCircle2 className="w-3.5 h-3.5" />{s}
-                </span>
-              ))}
+              {rawSkills.map(s => {
+                const has = matchingSet.has(s.toLowerCase());
+                return has ? (
+                  <span
+                    key={s}
+                    className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[12.5px] font-medium
+                               bg-emerald-500/15 text-emerald-400 border border-emerald-500/30"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5 flex-shrink-0" />
+                    {s}
+                  </span>
+                ) : (
+                  <span
+                    key={s}
+                    className="inline-flex items-center px-3 py-1 rounded-full text-[12.5px] font-medium
+                               bg-white/[0.04] text-white/35 border border-white/[0.08]"
+                  >
+                    {s}
+                  </span>
+                );
+              })}
             </div>
           </div>
         )}
-        {job.skill_gaps?.length > 0 && (
-          <div>
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Skills to Develop</p>
-            <div className="flex flex-wrap gap-2">
-              {job.skill_gaps.map(s => (
-                <span key={s} className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/10 text-amber-400 text-sm border border-amber-500/20">
-                  <AlertCircle className="w-3.5 h-3.5" />{s}
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
-        {job.reasoning && (
-          <p className="text-sm text-muted-foreground italic border-l-2 border-primary/30 pl-3 mt-auto">{job.reasoning}</p>
-        )}
-      </div>
 
-      {/* Actions */}
-      <div className="p-6 border-t border-border flex items-center justify-between">
-        <button id="skip-btn" onClick={onSkip} className="group flex flex-col items-center gap-1" aria-label="Skip">
-          <div className="w-14 h-14 rounded-full border-2 border-border flex items-center justify-center group-hover:border-red-400 group-hover:bg-red-400/10 transition-all duration-200">
-            <ChevronLeft className="w-6 h-6 text-muted-foreground group-hover:text-red-400 transition-colors" />
-          </div>
-          <span className="text-xs text-muted-foreground group-hover:text-red-400 transition-colors font-medium">Skip</span>
-        </button>
-
-        <span className="text-xs text-muted-foreground/40 select-none">
-          <kbd className="px-1.5 py-0.5 rounded border border-border text-[10px]">←</kbd>
-          {" "}skip · apply{" "}
-          <kbd className="px-1.5 py-0.5 rounded border border-border text-[10px]">→</kbd>
-        </span>
-
-        <button id="apply-btn" onClick={onApply} className="group flex flex-col items-center gap-1" aria-label="Apply">
-          <div className="w-14 h-14 rounded-full border-2 border-border flex items-center justify-center group-hover:border-emerald-400 group-hover:bg-emerald-400/10 transition-all duration-200">
-            <ChevronRight className="w-6 h-6 text-muted-foreground group-hover:text-emerald-400 transition-colors" />
-          </div>
-          <span className="text-xs text-muted-foreground group-hover:text-emerald-400 transition-colors font-medium">Apply</span>
-        </button>
       </div>
     </div>
   );
@@ -441,12 +532,71 @@ export default function JobsPage() {
         </div>
       )}
 
-      <div className="flex-1 w-full flex items-center justify-center px-4 py-4 overflow-hidden mx-auto">
-        <div className="w-full max-w-6xl flex justify-center h-full items-center">
-          {currentJob ? <JobCard job={currentJob} animating={animating} onSkip={handleSkip} onApply={handleApply} />
-            : isWaiting ? <LoadingCard />
-              : isEmpty ? <EmptyCard />
-                : null}
+      <div className="flex-1 w-full flex items-center justify-center px-4 py-1 overflow-hidden">
+        {/* Outer row: [Skip] [Card] [Apply] */}
+        <div className="w-[90%] flex items-center justify-center gap-6">
+
+          {/* ── Skip button ─────────────────────────────────────── */}
+          <div className="flex-shrink-0 flex flex-col items-center justify-center">
+            <button
+              id="skip-btn"
+              onClick={handleSkip}
+              aria-label="Skip"
+              disabled={!currentJob}
+              className="
+                flex flex-col items-center gap-2
+                group disabled:opacity-30 disabled:cursor-not-allowed
+              "
+            >
+              <div className="
+                w-14 h-14 rounded-full border-2 border-white/15 bg-white/5
+                flex items-center justify-center
+                group-hover:border-red-500/70 group-hover:bg-red-500/10
+                transition-all duration-200
+              ">
+                <ArrowLeft className="w-5 h-5 text-white/40 group-hover:text-red-400 transition-colors" />
+              </div>
+              <span className="text-[11px] font-semibold text-white/30 uppercase tracking-widest group-hover:text-red-400 transition-colors">
+                Skip
+              </span>
+            </button>
+          </div>
+
+          {/* ── Card area ───────────────────────────────────────── */}
+          <div className="flex-1 flex justify-center min-w-0">
+            {currentJob
+              ? <JobCard job={currentJob} animating={animating} />
+              : isWaiting ? <LoadingCard />
+                : isEmpty ? <EmptyCard />
+                  : null}
+          </div>
+
+          {/* ── Apply button ────────────────────────────────────── */}
+          <div className="flex-shrink-0 flex flex-col items-center justify-center">
+            <button
+              id="apply-btn"
+              onClick={handleApply}
+              aria-label="Apply"
+              disabled={!currentJob}
+              className="
+                flex flex-col items-center gap-2
+                group disabled:opacity-30 disabled:cursor-not-allowed
+              "
+            >
+              <div className="
+                w-14 h-14 rounded-full border-2 border-emerald-500/40 bg-emerald-500/10
+                flex items-center justify-center
+                group-hover:border-emerald-400/80 group-hover:bg-emerald-500/20
+                transition-all duration-200
+              ">
+                <ArrowRight className="w-5 h-5 text-emerald-400 transition-colors" />
+              </div>
+              <span className="text-[11px] font-semibold text-emerald-500/70 uppercase tracking-widest group-hover:text-emerald-400 transition-colors">
+                Apply
+              </span>
+            </button>
+          </div>
+
         </div>
       </div>
     </div>

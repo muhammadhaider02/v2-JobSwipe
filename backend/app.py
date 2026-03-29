@@ -1213,7 +1213,7 @@ def get_job_detail_endpoint(job_id):
 # ──────────────────────────────────────────────────────────────────────────────
 
 VETTING_BATCH_SIZE = 50        # Jobs loaded per DB query
-VETTING_BUFFER   = 25          # How many un-consumed approved jobs to keep ahead
+VETTING_BUFFER   = 30          # How many un-consumed approved jobs to keep ahead
 VETTING_IDLE_TTL = 60          # Seconds with no poll before the thread stops
 
 
@@ -1545,10 +1545,11 @@ def vetting_results_endpoint():
         total  = _vs_job_count(user_id)
         status = _vs_get_status(user_id)
 
-        # If no new jobs and thread is just paused (buffer full), tell the
-        # client to stop polling — it already has everything available.
-        # It should resume only when the user consumes enough cards.
-        if not jobs and status == "processing":
+        # Only signal "buffered" when the buffer genuinely has jobs but none
+        # are new (thread paused because buffer is full).  If total==0 the
+        # thread is still warming up (e.g. loading the embedding model) and we
+        # must keep the client polling, so leave status as "processing".
+        if not jobs and status == "processing" and total > 0:
             status = "buffered"
 
         return jsonify({"jobs": jobs, "total": total, "status": status}), 200

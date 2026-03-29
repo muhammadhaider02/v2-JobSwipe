@@ -28,7 +28,7 @@ WEIGHTS = {
 }
 
 # Minimum score threshold for jobs to pass vetting
-MIN_SCORE_THRESHOLD = 0.60
+MIN_SCORE_THRESHOLD = 0.70
 
 # Semantic similarity threshold for skill matching
 SKILL_SIMILARITY_THRESHOLD = 0.30
@@ -442,7 +442,7 @@ def calculate_location_fit(user_location: str, job_location: str,
             return 0.8
     
     # Location mismatch
-    return 0.4
+    return 0.2
 
 
 def calculate_final_score(scores: Dict[str, float]) -> float:
@@ -462,9 +462,9 @@ def calculate_final_score(scores: Dict[str, float]) -> float:
 def _build_reasoning(final_score: float, matching_skills: List[str], 
                      skill_gaps: List[str], user_profile: Dict[str, Any]) -> str:
     """Build a fast template-based reasoning string. No LLM calls."""
-    if final_score >= 0.75:
+    if final_score >= 0.85:
         strength = "strong match"
-    elif final_score >= 0.60:
+    elif final_score >= 0.70:
         strength = "moderate match"
     else:
         strength = "potential opportunity"
@@ -721,10 +721,10 @@ def vetting_officer_node(state: AgentState) -> Dict[str, Any]:
             reasoning = _build_reasoning(final_score, matching_skills, skill_gaps, user_profile)
             
             # Determine confidence level
-            if final_score >= 0.75:
+            if final_score >= 0.85:
                 confidence = "high"
                 recommendation = "strong_fit"
-            elif final_score >= 0.60:
+            elif final_score >= 0.70:
                 confidence = "medium"
                 recommendation = "moderate_fit"
             else:
