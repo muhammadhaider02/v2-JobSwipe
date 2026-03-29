@@ -5,6 +5,8 @@ import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { ArrowLeft, FileText, ArrowRight } from "lucide-react";
+import Link from "next/link";
 
 const BACKEND_BASE = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
 
@@ -243,127 +245,144 @@ export default function JobApplicationMaterialsPage() {
 
   if (loading) {
     return (
-      <main className="min-h-screen p-6 md:p-10">
-        <div className="mx-auto max-w-5xl">
-          <p className="text-sm text-muted-foreground">Loading application materials...</p>
-        </div>
-      </main>
+      <div className="flex-1 w-full bg-gradient-to-br from-background to-muted/20 flex flex-col relative items-center justify-center min-h-[50vh]">
+        <div className="text-sm text-muted-foreground">Loading application materials...</div>
+      </div>
     );
   }
 
   return (
-    <main className="min-h-screen p-6 md:p-10">
-      <div className="mx-auto max-w-5xl space-y-6">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-semibold">Application Materials</h1>
-            <p className="text-sm text-muted-foreground">{title}</p>
-          </div>
-          <Button variant="outline" onClick={() => router.push("/jobs")}>Back to Jobs</Button>
-        </div>
+    <div className="flex-1 w-full bg-gradient-to-br from-background to-muted/20 flex flex-col relative">
+      <div className="absolute top-4 left-6 z-10">
+        <Link
+          href="/jobs"
+          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4" /> Back
+        </Link>
+      </div>
 
-        {error && (
-          <Card>
-            <CardContent className="pt-6 text-sm text-red-600">{error}</CardContent>
-          </Card>
-        )}
-
-        {message && (
-          <Card>
-            <CardContent className="pt-6 text-sm text-green-700">{message}</CardContent>
-          </Card>
-        )}
-
-        <Card>
-          <CardHeader>
-            <CardTitle>1. Resume Template Selection (Generic)</CardTitle>
-            <CardDescription>Minimal selection saved with your draft.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="space-y-2">
-              <p className="text-sm font-medium">Select sections to optimize</p>
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                {OPTIMIZABLE_SECTIONS.map((section) => (
-                  <label key={section.key} className="flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={selectedSections.includes(section.key)}
-                      onChange={() => toggleSection(section.key)}
-                    />
-                    <span>{section.label}</span>
-                  </label>
-                ))}
-              </div>
+      <div className="flex-1 w-full pb-8 pt-0 px-4">
+        <div className="max-w-6xl mx-auto mt-0 lg:mt-2 space-y-6">
+          {/* Header */}
+          <div className="mb-5">
+            <div className="flex items-center gap-3 mb-2">
+              <FileText className="w-8 h-8 text-primary" />
+              <h1 className="text-4xl font-bold">Application Materials</h1>
             </div>
+            <p className="text-muted-foreground">
+              {title}
+            </p>
+          </div>
 
-            <select
-              className="h-10 w-full rounded-md border bg-background px-3 text-sm"
-              value={resumeTemplate}
-              onChange={(e) => setResumeTemplate(e.target.value)}
-            >
-              <option value="generic-classic">Generic Classic</option>
-              <option value="generic-modern">Generic Modern</option>
-              <option value="generic-compact">Generic Compact</option>
-            </select>
+          {error && (
+            <Card>
+              <CardContent className="pt-6 text-sm text-red-600">{error}</CardContent>
+            </Card>
+          )}
 
-            <Button onClick={prepareMaterials} disabled={!userId || preparing || selectedSections.length === 0}>
-              {preparing ? "Preparing..." : "Prepare Materials"}
-            </Button>
-          </CardContent>
-        </Card>
+          {message && (
+            <Card>
+              <CardContent className="pt-6 text-sm text-green-700">{message}</CardContent>
+            </Card>
+          )}
 
-        <Card>
-          <CardHeader>
-            <CardTitle>2. Optimized Resume (Editable)</CardTitle>
-            <CardDescription>Edit the JSON directly for now.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <textarea
-              className="min-h-[260px] w-full rounded-md border bg-background p-3 font-mono text-xs"
-              value={resumeJsonText}
-              onChange={(e) => setResumeJsonText(e.target.value)}
-            />
-          </CardContent>
-        </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>1. Resume Template Selection (Generic)</CardTitle>
+              <CardDescription>Minimal selection saved with your draft.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="space-y-2">
+                <p className="text-sm font-medium">Select sections to optimize</p>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {OPTIMIZABLE_SECTIONS.map((section) => (
+                    <label key={section.key} className="flex items-center gap-2 text-sm">
+                      <input
+                        type="checkbox"
+                        checked={selectedSections.includes(section.key)}
+                        onChange={() => toggleSection(section.key)}
+                      />
+                      <span>{section.label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>3. Cover Letter (Editable)</CardTitle>
-            <CardDescription>Pick template and edit content.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex flex-col gap-3 sm:flex-row">
               <select
                 className="h-10 w-full rounded-md border bg-background px-3 text-sm"
-                value={coverLetterTemplate}
-                onChange={(e) => setCoverLetterTemplate(e.target.value)}
+                value={resumeTemplate}
+                onChange={(e) => setResumeTemplate(e.target.value)}
               >
-                {templates.length === 0 && <option value="">No templates found</option>}
-                {templates.map((template) => (
-                  <option key={template.name} value={template.name}>
-                    {template.display_name}
-                  </option>
-                ))}
+                <option value="generic-classic">Generic Classic</option>
+                <option value="generic-modern">Generic Modern</option>
+                <option value="generic-compact">Generic Compact</option>
               </select>
-              <Button variant="outline" onClick={regenerateCoverLetter} disabled={!coverLetterTemplate || !userId}>
-                Regenerate
+
+              <Button onClick={prepareMaterials} disabled={!userId || preparing || selectedSections.length === 0}>
+                {preparing ? "Preparing..." : "Prepare Materials"}
               </Button>
-            </div>
+            </CardContent>
+          </Card>
 
-            <textarea
-              className="min-h-[220px] w-full rounded-md border bg-background p-3 text-sm"
-              value={coverLetterText}
-              onChange={(e) => setCoverLetterText(e.target.value)}
-            />
-          </CardContent>
-        </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle>2. Optimized Resume (Editable)</CardTitle>
+              <CardDescription>Edit the JSON directly for now.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <textarea
+                className="min-h-[260px] w-full rounded-md border bg-background p-3 font-mono text-xs"
+                value={resumeJsonText}
+                onChange={(e) => setResumeJsonText(e.target.value)}
+              />
+            </CardContent>
+          </Card>
 
-        <div className="flex justify-end">
-          <Button onClick={saveDraft} disabled={saving || !applicationId || !userId}>
-            {saving ? "Saving..." : "Save Draft"}
-          </Button>
+          <Card>
+            <CardHeader>
+              <CardTitle>3. Cover Letter (Editable)</CardTitle>
+              <CardDescription>Pick template and edit content.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <select
+                  className="h-10 w-full rounded-md border bg-background px-3 text-sm"
+                  value={coverLetterTemplate}
+                  onChange={(e) => setCoverLetterTemplate(e.target.value)}
+                >
+                  {templates.length === 0 && <option value="">No templates found</option>}
+                  {templates.map((template) => (
+                    <option key={template.name} value={template.name}>
+                      {template.display_name}
+                    </option>
+                  ))}
+                </select>
+                <Button variant="outline" onClick={regenerateCoverLetter} disabled={!coverLetterTemplate || !userId}>
+                  Regenerate
+                </Button>
+              </div>
+
+              <textarea
+                className="min-h-[220px] w-full rounded-md border bg-background p-3 text-sm"
+                value={coverLetterText}
+                onChange={(e) => setCoverLetterText(e.target.value)}
+              />
+            </CardContent>
+          </Card>
+
+          <div className="flex justify-end w-full pb-0 -mt-2">
+            <button
+              onClick={saveDraft}
+              disabled={saving || !applicationId || !userId}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground text-sm rounded-lg font-medium transition-all shadow-sm hover:shadow-md disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {saving ? "Saving..." : "Save Draft"}
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       </div>
-    </main>
+    </div>
   );
 }

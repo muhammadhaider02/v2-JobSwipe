@@ -271,6 +271,51 @@ class SupabaseService:
         except APIError as e:
             print(f"❌ Failed to search jobs: {e}")
             return []
+
+    def get_jobs_for_roles(
+        self,
+        roles: List[str],
+        offset: int = 0,
+        limit: int = 50,
+    ) -> List[Dict]:
+        """
+        Fetch a paginated batch of jobs whose title matches any of the given roles.
+
+        Uses ILIKE pattern matching on job_title for each role (OR-combined).
+        Results are ordered by job_id for stable cursor-based pagination.
+
+        Args:
+            roles: List of role names, e.g. ["Backend Developer", "Python Engineer"]
+            offset: Number of rows to skip (pagination cursor)
+            limit: Maximum rows to return
+
+        Returns:
+            List of job dicts from the DB
+        """
+        if not roles:
+            return []
+
+        try:
+            query = self.client.table("jobs").select("*")
+
+            # Build OR filter: job_title ILIKE '%Role1%' OR job_title ILIKE '%Role2%' ...
+            ilike_clauses = ",".join(
+                f"job_title.ilike.%{role.strip()}%" for role in roles
+            )
+            query = query.or_(ilike_clauses)
+
+            response = (
+                query
+                .order("job_id")
+                .range(offset, offset + limit - 1)
+                .execute()
+            )
+            return response.data if response.data else []
+
+        except APIError as e:
+            print(f"❌ Failed to get_jobs_for_roles: {e}")
+            return []
+
     
     # ==================== Application Operations ====================
     

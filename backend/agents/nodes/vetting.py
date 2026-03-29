@@ -2,10 +2,10 @@
 Vetting Officer Node: Intelligent job matching with multi-factor scoring.
 
 Scores and filters jobs based on:
-  Skill Match (35%)          - User's skills vs job's required skills
+  Skill Match (30%)          - User's skills vs job's required skills
   Query Match (25%)          - Semantic match between user's search query and job title
-  Experience Alignment (20%) - User's years/seniority vs job requirements
-  Location Fit (15%)         - City match or remote
+  Experience Alignment (15%) - User's years/seniority vs job requirements
+  Location Fit (25%)         - City match or remote
   Title Similarity (5%)      - Past job titles vs job title
 """
 
@@ -20,10 +20,10 @@ from langchain_core.messages import AIMessage
 
 # Scoring weights (must sum to 1.0)
 WEIGHTS = {
-    "skill_match": 0.35,
+    "skill_match": 0.30,
     "query_match": 0.25,
-    "experience_alignment": 0.20,
-    "location_fit": 0.15,
+    "experience_alignment": 0.15,
+    "location_fit": 0.25,
     "title_similarity": 0.05,
 }
 
@@ -356,49 +356,54 @@ def calculate_experience_alignment(user_years: int, user_latest_title: str,
     """
     if not job_experience:
         return 1.0  # No requirement = always match
-    
+
     try:
         # Parse user's band
         user_band = parse_experience_band(user_years, user_latest_title)
-        
-        # Parse job's required band from text
-        job_experience_lower = job_experience.lower()
-        job_band = None
-        
-        for band, keywords in SENIORITY_KEYWORDS.items():
-            if any(kw in job_experience_lower for kw in keywords):
-                job_band = band
-                break
-        
-        # Fallback: extract years from job requirement
-        if not job_band:
-            years_match = re.search(r'(\d+)\+?\s*(?:years?|yrs?)', job_experience_lower)
-            if years_match:
-                required_years = int(years_match.group(1))
-                job_band = parse_experience_band(required_years)
-            else:
-                return 0.7  # Unknown requirement, give moderate score
-        
+
+        # If the DB gave us an integer (years), skip text parsing entirely
+        if isinstance(job_experience, (int, float)):
+            required_years = int(job_experience)
+            job_band = parse_experience_band(required_years)
+        else:
+            # Parse job's required band from text
+            job_experience_lower = str(job_experience).lower()
+            job_band = None
+
+            for band, keywords in SENIORITY_KEYWORDS.items():
+                if any(kw in job_experience_lower for kw in keywords):
+                    job_band = band
+                    break
+
+            # Fallback: extract years from job requirement text
+            if not job_band:
+                years_match = re.search(r'(\d+)\+?\s*(?:years?|yrs?)', job_experience_lower)
+                if years_match:
+                    required_years = int(years_match.group(1))
+                    job_band = parse_experience_band(required_years)
+                else:
+                    return 0.7  # Unknown requirement, give moderate score
+
         # Band hierarchy for distance calculation
         band_order = ["intern", "junior", "mid", "senior", "lead"]
-        
+
         try:
             user_idx = band_order.index(user_band)
-            job_idx = band_order.index(job_band)
+            job_idx  = band_order.index(job_band)
             distance = abs(user_idx - job_idx)
         except ValueError:
             return 0.7  # Unknown band, moderate score
-        
+
         # Score based on distance
         if distance == 0:
-            return 1.0  # Exact match
+            return 1.0   # Exact match
         elif distance == 1:
-            return 0.7  # Adjacent band (e.g., mid vs senior)
+            return 0.7   # Adjacent band
         elif distance == 2:
-            return 0.4  # 2 bands apart
+            return 0.4   # 2 bands apart
         else:
-            return 0.3  # 3+ bands apart
-    
+            return 0.3   # 3+ bands apart
+
     except Exception as e:
         print(f"Experience alignment error: {e}")
         return 0.5  # Default to moderate score on error
@@ -477,26 +482,101 @@ def _compute_years_from_experience(experience: list) -> int:
     """
     Estimate years of experience from the experience array.
 
-    Parses year ranges like "Sep 2024 - Oct 2024" or "2022 - 2025".
-    Falls back to counting each entry as 1 year if no years found.
-    Caps at 40 to prevent corrupt data from inflating the score.
+    Three-pass approach:
+      Pass 1 – Full 4-digit year pairs: "2022 - 2025", "Aug 2022 - Sep 2023", "2018 - Present"
+      Pass 2 – Short date pairs: "7/9/25 - 7/10/26", "07/2022 - 09/2023"
+      Pass 3 – Literal "N years" / "N yrs" text
+
+    If all passes produce 0 for an entry → default 3 years for that entry.
+    Total is capped at 10 years.
     """
     import re
+    from datetime import datetime
+
+    current_year = datetime.now().year
     total_years = 0
+
+    def _short_date_to_year(s: str) -> int:
+        """Parse MM/DD/YY or MM/YYYY or MM/DD/YYYY → calendar year."""
+        parts = re.split(r"[/\-]", s.strip())
+        if len(parts) == 2:
+            # MM/YYYY or MM/YY
+            try:
+                yr = int(parts[1])
+                if yr < 100:
+                    yr = 2000 + yr if yr <= 29 else 1900 + yr
+                return yr
+            except ValueError:
+                pass
+        elif len(parts) == 3:
+            # MM/DD/YYYY or MM/DD/YY
+            try:
+                yr = int(parts[2])
+                if yr < 100:
+                    yr = 2000 + yr if yr <= 29 else 1900 + yr
+                return yr
+            except ValueError:
+                pass
+        raise ValueError(f"Cannot parse short date: {s}")
+
     for entry in (experience or []):
         if not isinstance(entry, dict):
             continue
-        duration = str(entry.get("duration", "") or "")
-        years = re.findall(r"\b(20\d{2}|19\d{2})\b", duration)
-        if len(years) >= 2:
+        duration = str(entry.get("duration", "") or "").strip()
+        if not duration:
+            continue
+
+        entry_years = 0
+
+        # ── Pass 1: Full 4-digit year pairs ───────────────────────────────
+        # Matches: "2022 - 2025", "Aug 2022 – Sep 2023", "2018 - Present"
+        pattern1 = re.compile(
+            r"(\d{4})\s*[-–—to]+\s*(present|\d{4})",
+            re.IGNORECASE,
+        )
+        for m in pattern1.finditer(duration):
+            start = int(m.group(1))
+            end_raw = m.group(2).lower()
+            end = current_year if end_raw == "present" else int(end_raw)
+            diff = max(0, end - start)
+            entry_years += diff
+
+        if entry_years > 0:
+            total_years += entry_years
+            continue
+
+        # ── Pass 2: Short date pairs ──────────────────────────────────────
+        # Matches: "7/9/25 - 7/10/26", "07/2022 - 09/2023"
+        pattern2 = re.compile(
+            r"(\d{1,2}[/\-]\d{2,4}(?:[/\-]\d{2,4})?)\s*[-–—to]+\s*(present|\d{1,2}[/\-]\d{2,4}(?:[/\-]\d{2,4})?)",
+            re.IGNORECASE,
+        )
+        for m in pattern2.finditer(duration):
             try:
-                total_years += abs(int(years[-1]) - int(years[0]))
-                continue
+                start_yr = _short_date_to_year(m.group(1))
+                end_raw = m.group(2).lower()
+                end_yr = current_year if end_raw == "present" else _short_date_to_year(end_raw)
+                diff = max(0, end_yr - start_yr)
+                entry_years += diff
             except ValueError:
                 pass
-        # Fallback: count the entry as 1 year
-        if duration.strip():
-            total_years += 1
+
+        if entry_years > 0:
+            total_years += entry_years
+            continue
+
+        # ── Pass 3: Literal "N years" / "N yrs" ──────────────────────────
+        pattern3 = re.compile(r"(\d+)\s*(?:years?|yrs?)", re.IGNORECASE)
+        for m in pattern3.finditer(duration):
+            entry_years += int(m.group(1))
+
+        if entry_years > 0:
+            total_years += entry_years
+            continue
+
+        # ── Nothing matched → safe default ────────────────────────────────
+        total_years += 3
+
     return min(total_years, 10)
 
 

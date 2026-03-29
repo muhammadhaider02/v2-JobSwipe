@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { Briefcase, Sparkles, ArrowLeft, Loader2, BookOpen, Check, FileText, Mail } from "lucide-react";
+import { Briefcase, Sparkles, ArrowLeft, Loader2, BookOpen, Check } from "lucide-react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 
@@ -64,8 +64,6 @@ export default function RecommendationsPage() {
         let skills: string[];
         if (skillsParam) {
           skills = JSON.parse(decodeURIComponent(skillsParam));
-          // Store in sessionStorage for later use
-          sessionStorage.setItem('userSkills', JSON.stringify(skills));
         } else {
           // Try to restore from sessionStorage
           const storedSkills = sessionStorage.getItem('userSkills');
@@ -80,14 +78,25 @@ export default function RecommendationsPage() {
 
         setUserSkills(skills);
 
-        // Check if we have cached recommendations
+        // Check if we have cached recommendations.
+        // Use the cache if:
+        //   1. There is NO skills param (navigated back without URL), OR
+        //   2. There IS a skills param but it matches the skills we already computed for
+        //      (e.g. browser back button keeps the URL intact — same skills, no need to re-fetch)
+        // Only skip the cache (and re-fetch) when skills have genuinely changed.
         const cachedRecommendations = sessionStorage.getItem('recommendations');
-        if (cachedRecommendations && !skillsParam) {
-          // Use cached data if returning to page
+        const cachedSkills = sessionStorage.getItem('userSkills');
+        const skillsUnchanged = cachedSkills === JSON.stringify(skills);
+
+        if (cachedRecommendations && (!skillsParam || skillsUnchanged)) {
+          // Serve from cache — skills haven't changed
           setRecommendations(JSON.parse(cachedRecommendations));
           setLoading(false);
           return;
         }
+
+        // Skills have changed (or no cache) — persist new skills and re-fetch
+        sessionStorage.setItem('userSkills', JSON.stringify(skills));
 
         const base = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5000';
 
@@ -186,16 +195,16 @@ export default function RecommendationsPage() {
 
   const handleBrowseJobs = async () => {
     if (!userId) {
-      router.push('/jobs');
+      router.push('/select-jobs');
       return;
     }
 
     try {
       const base = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5000';
-      
+
       // First, fetch the existing user profile
       const profileResponse = await fetch(`${base}/user-profile/${userId}`);
-      
+
       if (profileResponse.ok) {
         const profileData = await profileResponse.json();
         const existingProfile = profileData.profile;
@@ -230,11 +239,11 @@ export default function RecommendationsPage() {
       }
 
       // Navigate to jobs page
-      router.push('/jobs');
+      router.push('/select-jobs');
     } catch (error) {
       console.error('Error saving recommended roles:', error);
       // Navigate anyway
-      router.push('/jobs');
+      router.push('/select-jobs');
     }
   };
 
@@ -249,7 +258,7 @@ export default function RecommendationsPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="flex-1 flex items-center justify-center">
         <div className="text-center">
           <Loader2 className="w-12 h-12 animate-spin mx-auto mb-4 text-primary" />
           <p className="text-lg text-muted-foreground">Finding your perfect roles...</p>
@@ -260,7 +269,7 @@ export default function RecommendationsPage() {
 
   if (error) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="flex-1 flex items-center justify-center w-full">
         <div className="text-center max-w-md">
           <div className="text-6xl mb-4">⚠️</div>
           <h1 className="text-2xl font-bold mb-2">Oops!</h1>
@@ -274,88 +283,72 @@ export default function RecommendationsPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background to-muted/20 py-12 px-4">
-      <div className="max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="mb-8">
-          <Link href="/onboarding" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-4">
-            <ArrowLeft size={16} /> Back to Form
-          </Link>
-          <div className="flex items-center gap-3 mb-2">
-            <Sparkles className="w-8 h-8 text-primary" />
-            <h1 className="text-4xl font-bold">Recommended Roles</h1>
+    <div className="flex-1 w-full bg-gradient-to-br from-background to-muted/20 flex flex-col relative">
+      <div className="absolute top-4 left-6 z-10">
+        <Link
+          href="/onboarding"
+          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4" /> Back to Form
+        </Link>
+      </div>
+      <div className="flex-1 w-full pb-12 pt-0 px-4">
+        <div className="max-w-6xl mx-auto mt-0 lg:mt-2">
+          {/* Header */}
+          <div className="mb-8">
+            <div className="flex items-center gap-3 mb-2">
+              <Sparkles className="w-8 h-8 text-primary" />
+              <h1 className="text-4xl font-bold">Recommended Roles</h1>
+            </div>
+            <p className="text-muted-foreground">
+              Based on your {userSkills.length} skill{userSkills.length !== 1 ? 's' : ''}, we found {recommendations.length} matching roles
+            </p>
           </div>
-          <p className="text-muted-foreground">
-            Based on your {userSkills.length} skill{userSkills.length !== 1 ? 's' : ''}, we found {recommendations.length} matching roles
-          </p>
-        </div>
 
-        {/* User Skills Display */}
-        <div className="mb-8 p-4 bg-card border rounded-lg">
-          <h2 className="text-sm font-semibold mb-3 text-muted-foreground">Your Skills</h2>
-          <div className="flex flex-wrap gap-2">
-            {userSkills.map((skill, idx) => (
-              <span key={idx} className="px-3 py-1 bg-primary/10 text-primary rounded-full text-sm">
-                {skill}
-              </span>
-            ))}
-          </div>
-        </div>
-
-        {/* Recommendations Grid */}
-        {recommendations.length === 0 ? (
-          <div className="text-center py-12">
-            <Briefcase className="w-16 h-16 mx-auto mb-4 text-muted-foreground opacity-50" />
-            <h2 className="text-xl font-semibold mb-2">No recommendations found</h2>
-            <p className="text-muted-foreground">Try adding more skills or check back later</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {recommendations.map((rec, idx) => (
-              <RoleCard
-                key={idx}
-                recommendation={rec}
-                rank={idx + 1}
-                learnedSkills={learnedSkills}
-                onMarkAsLearned={handleMarkAsLearned}
-                onViewLearningResources={handleViewLearningResources}
-              />
-            ))}
-          </div>
-        )}
-
-        {/* Browse Jobs Section */}
-        {recommendations.length > 0 && (
-          <div className="mt-12 border-t border-border pt-8">
-            <div className="max-w-2xl mx-auto text-center">
-              <div className="inline-flex p-3 bg-primary/10 rounded-full mb-4">
-                <Briefcase className="w-8 h-8 text-primary" />
-              </div>
-              <h2 className="text-2xl font-bold mb-3">Ready to Apply?</h2>
-              <p className="text-muted-foreground mb-6">
-                Browse real job listings that match your recommended roles and skill level. 
-                Start applying to positions that align with your expertise.
-              </p>
-              <div className="flex flex-wrap items-center justify-center gap-4">
-                <button
-                  onClick={handleBrowseJobs}
-                  className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white rounded-lg font-medium transition-all shadow-md hover:shadow-lg"
-                >
-                  <Briefcase className="w-5 h-5" />
-                  Browse Job Listings
-                </button>
-                <Link href="/resume" className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white rounded-lg font-medium transition-all shadow-md hover:shadow-lg">
-                  <FileText className="w-5 h-5" />
-                  Create Resume
-                </Link>
-                <Link href="/cover-letter" className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700 text-white rounded-lg font-medium transition-all shadow-md hover:shadow-lg">
-                  <Mail className="w-5 h-5" />
-                  Generate Cover Letter
-                </Link>
-              </div>
+          {/* User Skills Display */}
+          <div className="mb-8 p-4 bg-card border rounded-lg">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-base font-semibold text-foreground">Your Skills</h2>
+              <button
+                onClick={handleBrowseJobs}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground text-sm rounded-lg font-medium transition-all shadow-sm hover:shadow-md"
+              >
+                <Briefcase className="w-4 h-4" />
+                View Matching Jobs
+              </button>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {userSkills.map((skill, idx) => (
+                <span key={idx} className="px-3 py-1 bg-primary/10 text-primary rounded-full text-sm">
+                  {skill}
+                </span>
+              ))}
             </div>
           </div>
-        )}
+
+          {/* Recommendations Grid */}
+          {recommendations.length === 0 ? (
+            <div className="text-center py-12">
+              <Briefcase className="w-16 h-16 mx-auto mb-4 text-muted-foreground opacity-50" />
+              <h2 className="text-xl font-semibold mb-2">No recommendations found</h2>
+              <p className="text-muted-foreground">Try adding more skills or check back later</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {recommendations.map((rec, idx) => (
+                <RoleCard
+                  key={idx}
+                  recommendation={rec}
+                  rank={idx + 1}
+                  learnedSkills={learnedSkills}
+                  onMarkAsLearned={handleMarkAsLearned}
+                  onViewLearningResources={handleViewLearningResources}
+                />
+              ))}
+            </div>
+          )}
+
+        </div>
       </div>
     </div>
   );
@@ -398,7 +391,7 @@ function RoleCard({
     skill => learnedSkills.has(skill.toLowerCase())
   ).length;
   const matchedCount = existingSkills.length + learnedCount;
-  const dynamicCompletionPercentage = totalRequiredSkills > 0 
+  const dynamicCompletionPercentage = totalRequiredSkills > 0
     ? Math.round((matchedCount / totalRequiredSkills) * 100)
     : (recommendation.skillGapData?.completion_percentage || 0);
 

@@ -5,7 +5,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ExternalLink, BookOpen, Youtube, Loader2, Search, Filter } from "lucide-react";
+import { ExternalLink, BookOpen, Youtube, Loader2, Search, Filter, ArrowLeft, ArrowRight } from "lucide-react";
 
 type GoogleResult = {
   title: string;
@@ -251,7 +251,7 @@ export default function LearningResourcesPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-background to-muted/20 flex items-center justify-center">
+      <div className="flex-1 w-full bg-gradient-to-br from-background to-muted/20 flex items-center justify-center">
         <div className="text-center">
           <Loader2 className="w-12 h-12 animate-spin text-primary mx-auto mb-4" />
           <p className="text-lg text-muted-foreground">Finding the best learning resources for you...</p>
@@ -263,7 +263,7 @@ export default function LearningResourcesPage() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-background to-muted/20 flex items-center justify-center">
+      <div className="flex-1 w-full bg-gradient-to-br from-background to-muted/20 flex items-center justify-center">
         <Card className="p-8 max-w-md">
           <div className="text-center">
             <div className="text-red-500 text-5xl mb-4">⚠️</div>
@@ -278,7 +278,7 @@ export default function LearningResourcesPage() {
 
   if (!loading && resources.length === 0) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-background to-muted/20 flex items-center justify-center">
+      <div className="flex-1 w-full bg-gradient-to-br from-background to-muted/20 flex items-center justify-center">
         <Card className="p-8 max-w-md text-center">
           <Search className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
           <h2 className="text-xl font-semibold mb-2">No Skills Provided</h2>
@@ -294,243 +294,245 @@ export default function LearningResourcesPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background to-muted/20">
-      <div className="container mx-auto px-4 py-12">
-        <div className="mb-8">
-          <div className="flex items-center gap-3 mb-2">
-            <BookOpen className="w-8 h-8 text-primary" />
-            <h1 className="text-4xl font-bold">
-              Learning Resources
-            </h1>
-          </div>
-          <p className="text-muted-foreground">
-            Curated learning materials tailored to your preferences
-          </p>
+    <div className="flex-1 w-full flex flex-col relative bg-gradient-to-br from-background to-muted/20">
+      <div className="absolute top-4 left-6 z-10">
+        <button
+          onClick={() => {
+            const storedSkills = sessionStorage.getItem('learningResourcesSkills');
+            if (storedSkills) {
+              const skills = JSON.parse(storedSkills);
+              const skillsParam = encodeURIComponent(JSON.stringify(skills));
+              window.location.href = `/learning-preferences?skills=${skillsParam}`;
+            } else {
+              router.back();
+            }
+          }}
+          className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <ArrowLeft className="w-4 h-4" /> Back
+        </button>
+      </div>
 
-          {/* Show active filters */}
-          {preferences && (
-            <div className="mt-4 flex flex-wrap items-center gap-2">
-              <Filter className="w-4 h-4 text-primary" />
-              <span className="text-sm text-muted-foreground">Active filters:</span>
-              <Badge variant="secondary" className="bg-primary/10 text-primary">
-                {preferences.knowledgeLevel.charAt(0).toUpperCase() + preferences.knowledgeLevel.slice(1)}
-              </Badge>
-              <Badge variant="secondary" className="bg-primary/10 text-primary">
-                {preferences.timeCommitment === "short" ? "Quick Learning" :
-                  preferences.timeCommitment === "medium" ? "Moderate Pace" : "Deep Dive"}
-              </Badge>
-              {(preferences?.preferredChannels?.length ?? 0) > 0 && (
-                <Badge variant="secondary" className="bg-primary/10 text-primary">
-                  {preferences.preferredChannels.length} Preferred Channels
-                </Badge>
-              )}
+      <div className="flex-1 w-full pb-8 pt-0 px-4">
+        <div className="max-w-6xl mx-auto mt-0 lg:mt-2">
+          <div className="mb-8">
+            <div className="flex items-center gap-3 mb-2">
+              <BookOpen className="w-8 h-8 text-primary" />
+              <h1 className="text-4xl font-bold">
+                Learning Resources
+              </h1>
             </div>
-          )}
-        </div>
+            <p className="text-muted-foreground">
+              Curated learning materials tailored to your preferences
+            </p>
 
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-          <div className="lg:col-span-1">
-            <Card className="p-4 sticky top-4 bg-card border rounded-xl shadow-sm">
-              <h3 className="font-semibold mb-4 flex items-center gap-2">
-                <BookOpen className="w-5 h-5 text-primary" />
-                Skills to Learn ({resources.length})
-              </h3>
-              <div className="space-y-2">
-                {resources.map((resource) => {
-                  const filtered = filterResourcesByPreferences(resource);
-                  const totalResources = filtered.google_results.length + filtered.youtube_playlists.length;
-
-                  return (
-                    <button
-                      key={resource.skill}
-                      onClick={() => setSelectedSkill(resource.skill)}
-                      className={`w-full text-left px-4 py-3 rounded-lg transition-colors ${selectedSkill === resource.skill
-                        ? "bg-primary text-primary-foreground shadow-md"
-                        : "bg-muted hover:bg-muted/80"
-                        }`}
-                    >
-                      <div className="font-medium capitalize">{resource.skill}</div>
-                      <div className="text-xs mt-1 opacity-80">
-                        {totalResources} resources
-                      </div>
-                    </button>
-                  );
-                })}
+            {/* Show active filters */}
+            {preferences && (
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                <Filter className="w-4 h-4 text-primary" />
+                <span className="text-sm text-muted-foreground">Active filters:</span>
+                <Badge variant="secondary" className="bg-primary/10 text-primary">
+                  {preferences.knowledgeLevel.charAt(0).toUpperCase() + preferences.knowledgeLevel.slice(1)}
+                </Badge>
+                <Badge variant="secondary" className="bg-primary/10 text-primary">
+                  {preferences.timeCommitment === "short" ? "Quick Learning" :
+                    preferences.timeCommitment === "medium" ? "Moderate Pace" : "Deep Dive"}
+                </Badge>
+                {(preferences?.preferredChannels?.length ?? 0) > 0 && (
+                  <Badge variant="secondary" className="bg-primary/10 text-primary">
+                    {preferences.preferredChannels.length} Preferred Channels
+                  </Badge>
+                )}
               </div>
-            </Card>
+            )}
           </div>
 
-          <div className="lg:col-span-4">
-            {filteredResource && (
-              <div className="space-y-6">
-                <Card className="p-6 bg-card border rounded-xl shadow-sm">
-                  <h2 className="text-3xl font-bold capitalize mb-2">
-                    {filteredResource.skill}
-                  </h2>
-                  <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                    <span>
-                      📊 Confidence: {(filteredResource.total_confidence * 100).toFixed(0)}%
-                    </span>
-                    <span>
-                      📖 {filteredResource.google_results.length} Articles
-                    </span>
-                    <span>
-                      🎥 {filteredResource.youtube_playlists.length} Videos
-                    </span>
-                  </div>
-                </Card>
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+            <div className="lg:col-span-1">
+              <Card className="p-4 sticky top-4 bg-card border rounded-xl shadow-sm">
+                <h3 className="font-semibold mb-4 flex items-center gap-2">
+                  <BookOpen className="w-5 h-5 text-primary" />
+                  Skills to Learn ({resources.length})
+                </h3>
+                <div className="space-y-2">
+                  {resources.map((resource) => {
+                    const filtered = filterResourcesByPreferences(resource);
+                    const totalResources = filtered.google_results.length + filtered.youtube_playlists.length;
 
-                {/* Articles Section */}
-                {filteredResource.google_results.length > 0 && (
-                  <div>
-                    <h3 className="text-xl font-semibold mb-4 flex items-center gap-2">
-                      <BookOpen className="w-6 h-6 text-primary" />
-                      Articles & Tutorials
-                    </h3>
-                    <div className="space-y-4">
-                      {filteredResource.google_results.map((result, index) => (
-                        <Card key={index} className="p-5 bg-card border rounded-xl shadow-sm hover:shadow-md transition-shadow">
-                          <div className="flex items-start justify-between gap-4">
-                            <div className="flex-1">
-                              <a
-                                href={result.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="text-lg font-semibold text-primary hover:underline flex items-center gap-2"
-                              >
-                                {result.title}
-                                <ExternalLink className="w-4 h-4" />
-                              </a>
-                              <p className="text-sm text-muted-foreground mt-1">{result.domain}</p>
-                              <p className="text-sm mt-2 leading-relaxed">
-                                {result.snippet}
-                              </p>
-                            </div>
-                            <Badge className={getConfidenceBadge(result.confidence)}>
-                              {(result.confidence * 100).toFixed(0)}%
-                            </Badge>
-                          </div>
-                        </Card>
-                      ))}
+                    return (
+                      <button
+                        key={resource.skill}
+                        onClick={() => setSelectedSkill(resource.skill)}
+                        className={`w-full text-left px-4 py-3 rounded-lg transition-colors ${selectedSkill === resource.skill
+                          ? "bg-primary text-primary-foreground shadow-md"
+                          : "bg-muted hover:bg-muted/80"
+                          }`}
+                      >
+                        <div className="font-medium capitalize">{resource.skill}</div>
+                        <div className="text-xs mt-1 opacity-80">
+                          {totalResources} resources
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </Card>
+            </div>
+
+            <div className="lg:col-span-4">
+              {filteredResource && (
+                <div className="space-y-6">
+                  <Card className="p-6 bg-card border rounded-xl shadow-sm">
+                    <h2 className="text-3xl font-bold capitalize mb-2">
+                      {filteredResource.skill}
+                    </h2>
+                    <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                      <span>
+                        📊 Confidence: {(filteredResource.total_confidence * 100).toFixed(0)}%
+                      </span>
+                      <span>
+                        📖 {filteredResource.google_results.length} Articles
+                      </span>
+                      <span>
+                        🎥 {filteredResource.youtube_playlists.length} Videos
+                      </span>
                     </div>
-                  </div>
-                )}
+                  </Card>
 
-                {/* Videos Section */}
-                {filteredResource.youtube_playlists.length > 0 && (
-                  <div>
-                    <h3 className="text-xl font-semibold mb-4 flex items-center gap-2">
-                      <Youtube className="w-6 h-6 text-red-600" />
-                      Video Courses & Playlists
-                      {(preferences?.preferredChannels?.length ?? 0) > 0 && (
-                        <span className="text-sm text-muted-foreground font-normal">
-                          (Prioritizing your preferred channels)
-                        </span>
-                      )}
-                    </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {filteredResource.youtube_playlists.map((video, index) => {
-                        const isPreferred = preferences?.preferredChannels.some(channel =>
-                          video.channel.toLowerCase().includes(channel.toLowerCase())
-                        );
+                  {/* Articles Section */}
+                  {filteredResource.google_results.length > 0 && (
+                    <div>
+                      <h3 className="text-xl font-semibold mb-4 flex items-center gap-2">
+                        <BookOpen className="w-6 h-6 text-primary" />
+                        Articles & Tutorials
+                      </h3>
+                      <div className="space-y-4">
+                        {filteredResource.google_results.map((result, index) => (
+                          <Card key={index} className="p-5 bg-card border rounded-xl shadow-sm hover:shadow-md transition-shadow">
+                            <div className="flex items-start justify-between gap-4">
+                              <div className="flex-1">
+                                <a
+                                  href={result.url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-lg font-semibold text-primary hover:underline flex items-center gap-2"
+                                >
+                                  {result.title}
+                                  <ExternalLink className="w-4 h-4" />
+                                </a>
+                                <p className="text-sm text-muted-foreground mt-1">{result.domain}</p>
+                                <p className="text-sm mt-2 leading-relaxed">
+                                  {result.snippet}
+                                </p>
+                              </div>
+                              <Badge className={getConfidenceBadge(result.confidence)}>
+                                {(result.confidence * 100).toFixed(0)}%
+                              </Badge>
+                            </div>
+                          </Card>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
-                        return (
-                          <div
-                            key={index}
-                            onClick={() => window.open(video.url, '_blank', 'noopener,noreferrer')}
-                            className="cursor-pointer"
-                          >
-                            <Card className={`overflow-hidden bg-card border rounded-xl shadow-sm hover:shadow-md transition-shadow ${isPreferred ? 'ring-2 ring-green-500' : ''
-                              }`}>
-                              {video.thumbnail_url && (
-                                <div className="relative h-48 bg-gray-200">
-                                  <img
-                                    src={video.thumbnail_url}
-                                    alt={video.title}
-                                    className="w-full h-full object-cover"
-                                  />
-                                  <div className="absolute top-2 right-2">
-                                    <Badge className={getConfidenceBadge(video.confidence)}>
-                                      {(video.confidence * 100).toFixed(0)}%
-                                    </Badge>
-                                  </div>
-                                  {isPreferred && (
-                                    <div className="absolute top-2 left-2">
-                                      <Badge className="bg-green-600 text-white">
-                                        ⭐ Preferred
+                  {/* Videos Section */}
+                  {filteredResource.youtube_playlists.length > 0 && (
+                    <div>
+                      <h3 className="text-xl font-semibold mb-4 flex items-center gap-2">
+                        <Youtube className="w-6 h-6 text-red-600" />
+                        Video Courses & Playlists
+                        {(preferences?.preferredChannels?.length ?? 0) > 0 && (
+                          <span className="text-sm text-muted-foreground font-normal">
+                            (Prioritizing your preferred channels)
+                          </span>
+                        )}
+                      </h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {filteredResource.youtube_playlists.map((video, index) => {
+                          const isPreferred = preferences?.preferredChannels.some(channel =>
+                            video.channel.toLowerCase().includes(channel.toLowerCase())
+                          );
+
+                          return (
+                            <div
+                              key={index}
+                              onClick={() => window.open(video.url, '_blank', 'noopener,noreferrer')}
+                              className="cursor-pointer"
+                            >
+                              <Card className={`overflow-hidden bg-card border rounded-xl shadow-sm hover:shadow-md transition-shadow ${isPreferred ? 'ring-2 ring-green-500' : ''
+                                }`}>
+                                {video.thumbnail_url && (
+                                  <div className="relative h-48 bg-gray-200">
+                                    <img
+                                      src={video.thumbnail_url}
+                                      alt={video.title}
+                                      className="w-full h-full object-cover"
+                                    />
+                                    <div className="absolute top-2 right-2">
+                                      <Badge className={getConfidenceBadge(video.confidence)}>
+                                        {(video.confidence * 100).toFixed(0)}%
                                       </Badge>
                                     </div>
-                                  )}
+                                    {isPreferred && (
+                                      <div className="absolute top-2 left-2">
+                                        <Badge className="bg-green-600 text-white">
+                                          ⭐ Preferred
+                                        </Badge>
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                                <div className="p-4">
+                                  <h3 className="text-lg font-semibold hover:text-primary line-clamp-2">
+                                    {video.title}
+                                  </h3>
+                                  <div className="flex items-center gap-2 mt-2 text-sm text-muted-foreground">
+                                    <span className="font-medium">{video.channel}</span>
+                                    {video.video_count && (
+                                      <span className="text-xs bg-muted px-2 py-1 rounded">
+                                        {video.video_count} videos
+                                      </span>
+                                    )}
+                                  </div>
+                                  <p className="text-sm mt-2 line-clamp-2">
+                                    {video.description}
+                                  </p>
+                                  <div className="mt-3 inline-flex items-center gap-2 text-sm text-primary font-medium">
+                                    Watch on YouTube
+                                    <ExternalLink className="w-4 h-4" />
+                                  </div>
                                 </div>
-                              )}
-                              <div className="p-4">
-                                <h3 className="text-lg font-semibold hover:text-primary line-clamp-2">
-                                  {video.title}
-                                </h3>
-                                <div className="flex items-center gap-2 mt-2 text-sm text-muted-foreground">
-                                  <span className="font-medium">{video.channel}</span>
-                                  {video.video_count && (
-                                    <span className="text-xs bg-muted px-2 py-1 rounded">
-                                      {video.video_count} videos
-                                    </span>
-                                  )}
-                                </div>
-                                <p className="text-sm mt-2 line-clamp-2">
-                                  {video.description}
-                                </p>
-                                <div className="mt-3 inline-flex items-center gap-2 text-sm text-primary font-medium">
-                                  Watch on YouTube
-                                  <ExternalLink className="w-4 h-4" />
-                                </div>
-                              </div>
-                            </Card>
-                          </div>
-                        );
-                      })}
+                              </Card>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
-                  </div>
-                )}
-              </div>
-            )}
+                  )}
+                </div>
+              )}
+            </div>
           </div>
-        </div>
 
-        {/* Navigation Buttons */}
-        <div className="mt-8 grid grid-cols-1 lg:grid-cols-5 gap-6">
-          {/* Empty space to align with sidebar */}
-          <div className="lg:col-span-1 hidden lg:block"></div>
+          {/* Navigation Buttons */}
+          <div className="mt-8 grid grid-cols-1 lg:grid-cols-5 gap-6">
+            {/* Empty space to align with sidebar */}
+            <div className="lg:col-span-1 hidden lg:block"></div>
 
-          {/* Buttons aligned with main content */}
-          <div className="lg:col-span-4">
-            {selectedSkill && (
-              <div className="flex gap-4">
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    // Get the skills to pass back to learning-preferences
-                    const storedSkills = sessionStorage.getItem('learningResourcesSkills');
-                    if (storedSkills) {
-                      const skills = JSON.parse(storedSkills);
-                      const skillsParam = encodeURIComponent(JSON.stringify(skills));
-                      window.location.href = `/learning-preferences?skills=${skillsParam}`;
-                    } else {
-                      router.back();
-                    }
-                  }}
-                  className="flex-1"
-                  size="lg"
-                >
-                  Back
-                </Button>
-                <Button
-                  onClick={() => (window.location.href = `/skill-quiz/${encodeURIComponent(selectedSkill)}?from=/learning-resources`)}
-                  className="flex-1"
-                  size="lg"
-                >
-                  Ready to Take Quiz?
-                </Button>
-              </div>
-            )}
+            {/* Buttons aligned with main content */}
+            <div className="lg:col-span-4">
+              {selectedSkill && (
+                <div className="flex justify-end w-full pb-0">
+                  <button
+                    onClick={() => (window.location.href = `/skill-quiz/${encodeURIComponent(selectedSkill)}?from=/learning-resources`)}
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground text-sm rounded-lg font-medium transition-all shadow-sm hover:shadow-md"
+                  >
+                    Ready to Take Quiz?
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>

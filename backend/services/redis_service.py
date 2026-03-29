@@ -248,6 +248,101 @@ class RedisService:
             self.client.close()
             print("✅ Redis connection closed")
 
+    # ==================== Vetting Stream Support ====================
+
+    def _vetting_key(self, user_id: str, suffix: str) -> str:
+        return f"vetting:{user_id}:{suffix}"
+
+    def push_vetted_job(self, user_id: str, job: dict) -> bool:
+        """Append a vetted job JSON to the user's Redis list."""
+        try:
+            key = self._vetting_key(user_id, "jobs")
+            self.client.rpush(key, json.dumps(job))
+            self.client.expire(key, 3600)  # 1-hour TTL on the whole list
+            return True
+        except (RedisError, json.JSONDecodeError) as e:
+            print(f"❌ push_vetted_job failed: {e}")
+            return False
+
+    def get_vetted_jobs(self, user_id: str, since: int = 0) -> list:
+        """Return vetted jobs from index `since` onwards (inclusive)."""
+        try:
+            key = self._vetting_key(user_id, "jobs")
+            raw = self.client.lrange(key, since, -1)
+            return [json.loads(r) for r in raw]
+        except (RedisError, json.JSONDecodeError) as e:
+            print(f"❌ get_vetted_jobs failed: {e}")
+            return []
+
+    def get_vetted_job_count(self, user_id: str) -> int:
+        """Return total number of vetted jobs currently stored."""
+        try:
+            return self.client.llen(self._vetting_key(user_id, "jobs"))
+        except RedisError:
+            return 0
+
+    def add_seen_job(self, user_id: str, job_id: str) -> None:
+        """Mark a job as seen so it won't be processed again this session."""
+        try:
+            key = self._vetting_key(user_id, "seen")
+            self.client.sadd(key, job_id)
+            self.client.expire(key, 3600)
+        except RedisError as e:
+            print(f"⚠️  add_seen_job failed: {e}")
+
+    def is_job_seen(self, user_id: str, job_id: str) -> bool:
+        """Check if a job was already processed in this session."""
+        try:
+            return bool(self.client.sismember(self._vetting_key(user_id, "seen"), job_id))
+        except RedisError:
+            return False
+
+    def set_vetting_status(self, user_id: str, status: str) -> None:
+        """Set the vetting pipeline status: 'processing' | 'done' | 'idle'."""
+        try:
+            key = self._vetting_key(user_id, "status")
+            self.client.set(key, status, ex=3600)
+        except RedisError as e:
+            print(f"⚠️  set_vetting_status failed: {e}")
+
+    def get_vetting_status(self, user_id: str) -> str:
+        """Return current vetting status string, or 'idle' if not set."""
+        try:
+            val = self.client.get(self._vetting_key(user_id, "status"))
+            return val if val else "idle"
+        except RedisError:
+            return "idle"
+
+    def update_last_poll(self, user_id: str) -> None:
+        """Record the current timestamp as the last poll time (for TTL logic)."""
+        try:
+            import time
+            key = self._vetting_key(user_id, "last_poll")
+            self.client.set(key, str(time.time()), ex=120)
+        except RedisError as e:
+            print(f"⚠️  update_last_poll failed: {e}")
+
+    def get_last_poll(self, user_id: str) -> float:
+        """Return timestamp of last poll, or 0.0 if never polled."""
+        try:
+            val = self.client.get(self._vetting_key(user_id, "last_poll"))
+            return float(val) if val else 0.0
+        except (RedisError, ValueError):
+            return 0.0
+
+    def clear_vetting_session(self, user_id: str) -> None:
+        """Delete all vetting state for a user (call before starting a new session)."""
+        try:
+            keys = [
+                self._vetting_key(user_id, "jobs"),
+                self._vetting_key(user_id, "seen"),
+                self._vetting_key(user_id, "status"),
+                self._vetting_key(user_id, "last_poll"),
+            ]
+            self.client.delete(*keys)
+        except RedisError as e:
+            print(f"⚠️  clear_vetting_session failed: {e}")
+
 
 # Global service instance
 _redis_service: Optional[RedisService] = None

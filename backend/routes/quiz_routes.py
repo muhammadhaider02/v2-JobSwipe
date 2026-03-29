@@ -12,7 +12,7 @@ import uuid
 
 quiz_bp = Blueprint('quiz', __name__)
 hybrid_service = HybridQuizService()
-supabase_service = SupabaseService(use_service_role=True)
+supabase_service = SupabaseService()
 
 # In-memory storage for active quizzes
 active_quizzes: Dict[str, Any] = {}

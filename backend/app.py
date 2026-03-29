@@ -22,6 +22,8 @@ from services.supabase_service import SupabaseService
 from routes.campaign_routes import campaign_bp
 from routes.resume_optimization_routes import resume_optimization_bp
 from routes.cover_letter_routes import cover_letter_bp
+from routes.learning_resources import learning_resources_bp
+from routes.quiz_routes import quiz_bp
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 25 * 1024 * 1024  # 25MB upload cap
@@ -57,6 +59,8 @@ supabase_service = SupabaseService()
 app.register_blueprint(campaign_bp)
 app.register_blueprint(resume_optimization_bp)
 app.register_blueprint(cover_letter_bp)
+app.register_blueprint(learning_resources_bp)
+app.register_blueprint(quiz_bp)
 
 
 def _normalize_profile_payload(data):
@@ -1203,6 +1207,355 @@ def get_job_detail_endpoint(job_id):
         print(f"Error in get job detail: {e}")
         return jsonify({"error": str(e)}), 500
 
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Background vetting thread & streaming endpoints
+# ──────────────────────────────────────────────────────────────────────────────
+
+VETTING_BATCH_SIZE = 50        # Jobs loaded per DB query
+VETTING_BUFFER   = 25          # How many un-consumed approved jobs to keep ahead
+VETTING_IDLE_TTL = 60          # Seconds with no poll before the thread stops
+
+
+# ── In-memory vetting store (no Redis required) ───────────────────────────────
+# Structure per user_id:
+#   { "jobs": [...], "seen": set(), "status": "processing"|"done"|"idle",
+#     "last_poll": float timestamp }
+_vetting_sessions: Dict[str, Any] = {}
+_vetting_lock = threading.Lock()
+
+
+def _vs_clear(user_id: str) -> None:
+    with _vetting_lock:
+        _vetting_sessions[user_id] = {
+            "jobs": [],
+            "seen": set(),
+            "status": "processing",
+            "last_poll": 0.0,
+            "consumed": 0,
+        }
+
+
+def _vs_push_job(user_id: str, job: Dict[str, Any]) -> None:
+    with _vetting_lock:
+        _vetting_sessions.setdefault(user_id, {"jobs": [], "seen": set(), "status": "processing", "last_poll": 0.0})
+        _vetting_sessions[user_id]["jobs"].append(job)
+
+
+def _vs_get_jobs(user_id: str, since: int = 0) -> List[Dict[str, Any]]:
+    with _vetting_lock:
+        return list(_vetting_sessions.get(user_id, {}).get("jobs", [])[since:])
+
+
+def _vs_job_count(user_id: str) -> int:
+    with _vetting_lock:
+        return len(_vetting_sessions.get(user_id, {}).get("jobs", []))
+
+
+def _vs_is_seen(user_id: str, job_id: str) -> bool:
+    with _vetting_lock:
+        return job_id in _vetting_sessions.get(user_id, {}).get("seen", set())
+
+
+def _vs_mark_seen(user_id: str, job_id: str) -> None:
+    with _vetting_lock:
+        _vetting_sessions.setdefault(user_id, {"jobs": [], "seen": set(), "status": "processing", "last_poll": 0.0})
+        _vetting_sessions[user_id]["seen"].add(job_id)
+
+
+def _vs_set_status(user_id: str, status: str) -> None:
+    with _vetting_lock:
+        _vetting_sessions.setdefault(user_id, {"jobs": [], "seen": set(), "status": "idle", "last_poll": 0.0})
+        _vetting_sessions[user_id]["status"] = status
+
+
+def _vs_get_status(user_id: str) -> str:
+    with _vetting_lock:
+        return _vetting_sessions.get(user_id, {}).get("status", "idle")
+
+
+def _vs_update_poll(user_id: str) -> None:
+    import time
+    with _vetting_lock:
+        _vetting_sessions.setdefault(user_id, {"jobs": [], "seen": set(), "status": "idle", "last_poll": 0.0})
+        _vetting_sessions[user_id]["last_poll"] = time.time()
+
+
+def _vs_get_poll(user_id: str) -> float:
+    with _vetting_lock:
+        return _vetting_sessions.get(user_id, {}).get("last_poll", 0.0)
+
+
+def _vs_update_consumed(user_id: str, consumed: int) -> None:
+    """Record how many cards the user has consumed (skipped or applied)."""
+    with _vetting_lock:
+        sess = _vetting_sessions.get(user_id)
+        if sess is not None:
+            sess["consumed"] = max(sess.get("consumed", 0), consumed)
+
+
+def _vs_get_consumed(user_id: str) -> int:
+    with _vetting_lock:
+        return _vetting_sessions.get(user_id, {}).get("consumed", 0)
+
+
+# ── Background vetting thread ─────────────────────────────────────────────────
+
+def _background_vetting_loop(user_id: str, roles: List[str]) -> None:
+    """
+    Cursor-based vetting loop that runs in a daemon thread.
+
+    Flow:
+      1. Load a batch of DB jobs matching any of the provided roles
+      2. Skip already-seen jobs (in-memory set)
+      3. Vet each job; push approved jobs (score >= 0.60) to in-memory list
+      4. Pause when approved_count >= VETTING_TARGET
+      5. Resume when frontend polls (last_poll timestamp refreshes)
+      6. Stop when DB is exhausted or no poll for VETTING_IDLE_TTL seconds
+    """
+    import time
+
+    try:
+        from services.supabase_service import get_supabase_service
+        from agents.nodes.vetting import (
+            fetch_user_profile,
+            extract_user_titles,
+            calculate_query_match,
+            calculate_title_similarity,
+            calculate_skill_match,
+            calculate_experience_alignment,
+            calculate_location_fit,
+            calculate_final_score,
+            _compute_years_from_experience,
+            _build_reasoning,
+            MIN_SCORE_THRESHOLD,
+        )
+
+        db = get_supabase_service()
+
+        _vs_set_status(user_id, "processing")
+        _vs_update_poll(user_id)
+
+        # Fetch user profile once
+        user_profile = fetch_user_profile(user_id)
+        if not user_profile:
+            print(f"[vetting thread] No profile for {user_id}, aborting.")
+            _vs_set_status(user_id, "done")
+            return
+
+        user_titles = extract_user_titles(user_profile)
+        user_skills = user_profile.get("skills", [])
+        user_years = _compute_years_from_experience(user_profile.get("experience", []))
+        user_location = user_profile.get("location", "")
+
+        user_latest_title = ""
+        experience = user_profile.get("experience", [])
+        if experience and isinstance(experience, list):
+            latest = experience[0]
+            if isinstance(latest, dict):
+                user_latest_title = latest.get("job_title") or latest.get("title", "")
+
+        # Use first role as primary query-match signal
+        search_query = roles[0] if roles else ""
+
+        cursor = 0
+        approved_count = 0
+        db_exhausted = False
+
+        print(f"[vetting thread] Started for user={user_id[:8]}... roles={roles}")
+
+        while not db_exhausted:
+            # ── TTL watchdog ──────────────────────────────────────────────
+            idle_secs = time.time() - _vs_get_poll(user_id)
+            if idle_secs > VETTING_IDLE_TTL:
+                print(f"[vetting thread] {idle_secs:.0f}s idle — stopping.")
+                break
+
+            # ── Pause when buffer ahead of consumer is full ────────────────
+            approved_count = _vs_job_count(user_id)
+            consumed = _vs_get_consumed(user_id)
+            if (approved_count - consumed) >= VETTING_BUFFER:
+                time.sleep(1)
+                continue
+
+            # ── Load next batch from DB ───────────────────────────────────
+            batch = db.get_jobs_for_roles(roles, offset=cursor, limit=VETTING_BATCH_SIZE)
+            cursor += len(batch)
+
+            if not batch:
+                db_exhausted = True
+                print(f"[vetting thread] DB exhausted at cursor={cursor}.")
+                break
+
+            # ── Vet each job in the batch ─────────────────────────────────
+            for raw_job in batch:
+                # Inner TTL check
+                if time.time() - _vs_get_poll(user_id) > VETTING_IDLE_TTL:
+                    print(f"[vetting thread] TTL expired inside batch — stopping.")
+                    db_exhausted = True
+                    break
+
+                job_id_key = raw_job.get("job_id", "")
+                if not job_id_key or _vs_is_seen(user_id, job_id_key):
+                    continue
+                _vs_mark_seen(user_id, job_id_key)
+
+                job = _normalize_job_record_for_vetting(raw_job)
+
+                try:
+                    query_score   = calculate_query_match(search_query, job.get("title", ""))
+                    title_score   = calculate_title_similarity(user_titles, job.get("title", ""))
+                    skill_score, matching_skills, skill_gaps = calculate_skill_match(
+                        user_skills, job.get("skills", [])
+                    )
+                    exp_score = calculate_experience_alignment(
+                        user_years, user_latest_title, job.get("experience_required")
+                    )
+                    loc_score = calculate_location_fit(
+                        user_location, job.get("location", ""), job.get("employment_type")
+                    )
+                    final_score = calculate_final_score({
+                        "query_match":          query_score,
+                        "title_similarity":     title_score,
+                        "skill_match":          skill_score,
+                        "experience_alignment": exp_score,
+                        "location_fit":         loc_score,
+                    })
+                except Exception as score_err:
+                    print(f"[vetting thread] Scoring error for {job_id_key}: {score_err}")
+                    continue
+
+                if final_score < MIN_SCORE_THRESHOLD:
+                    continue
+
+                confidence = "high" if final_score >= 0.75 else "medium" if final_score >= 0.60 else "low"
+                reasoning  = _build_reasoning(final_score, matching_skills, skill_gaps, user_profile)
+
+                vetted = {
+                    "job_id":          job_id_key,
+                    "job_data":        job,
+                    "match_score":     final_score,
+                    "confidence":      confidence,
+                    "reasoning":       reasoning,
+                    "skill_gaps":      skill_gaps,
+                    "matching_skills": matching_skills,
+                }
+                _vs_push_job(user_id, vetted)
+                approved_count += 1
+                print(f"[vetting] ✅ {job.get('title', '?')} score={final_score:.2f}")
+
+                if (approved_count - _vs_get_consumed(user_id)) >= VETTING_BUFFER:
+                    break
+
+        _vs_set_status(user_id, "done")
+        final_count = _vs_job_count(user_id)
+        print(f"[vetting thread] Done. {final_count} jobs approved.")
+
+    except Exception as e:
+        import traceback
+        print(f"[vetting thread] Fatal error: {e}")
+        traceback.print_exc()
+        _vs_set_status(user_id, "done")
+
+
+# ── Endpoints ─────────────────────────────────────────────────────────────────
+
+@app.route("/api/jobs/start-vetting", methods=["POST", "OPTIONS"])
+@cross_origin(
+    origins="http://localhost:3000",
+    methods=["POST", "OPTIONS"],
+    allow_headers=["Content-Type"],
+    max_age=86400,
+)
+def start_vetting_endpoint():
+    """
+    Start a background vetting session for the given user and roles.
+
+    Body: { "user_id": "...", "roles": ["Backend Developer", "Python Engineer"] }
+    Returns immediately. Client polls GET /api/jobs/results.
+    """
+    if request.method == "OPTIONS":
+        return ("", 204)
+
+    try:
+        data = request.get_json() or {}
+        user_id = data.get("user_id")
+        roles   = data.get("roles", [])
+
+        if not user_id:
+            return jsonify({"error": "user_id is required"}), 400
+        if not roles or not isinstance(roles, list):
+            return jsonify({"error": "roles must be a non-empty array"}), 400
+
+        # Reset session state
+        _vs_clear(user_id)
+        _vs_update_poll(user_id)
+
+        # Kick off daemon thread
+        t = threading.Thread(
+            target=_background_vetting_loop,
+            args=(user_id, roles),
+            daemon=True,
+        )
+        t.start()
+
+        print(f"[start-vetting] Thread started — user={user_id[:8]}... roles={roles}")
+        return jsonify({"success": True, "status": "processing"}), 200
+
+    except Exception as e:
+        print(f"[start-vetting] Error: {e}")
+        import traceback; traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/jobs/results", methods=["GET", "OPTIONS"])
+@cross_origin(
+    origins="http://localhost:3000",
+    methods=["GET", "OPTIONS"],
+    allow_headers=["Content-Type"],
+    max_age=86400,
+)
+def vetting_results_endpoint():
+    """
+    Poll endpoint — returns vetted jobs discovered since index `since`.
+
+    Query params:
+        user_id (str): required
+        since   (int): index to start from (default 0)
+
+    Response:
+        { "jobs": [...], "total": N, "status": "processing" | "done" | "idle" }
+    """
+    if request.method == "OPTIONS":
+        return ("", 204)
+
+    try:
+        user_id  = request.args.get("user_id")
+        since    = int(request.args.get("since", 0))
+        consumed = int(request.args.get("consumed", 0))
+
+        if not user_id:
+            return jsonify({"error": "user_id is required"}), 400
+
+        # Refresh TTL + consumer position so background thread resumes when needed
+        _vs_update_poll(user_id)
+        _vs_update_consumed(user_id, consumed)
+
+        jobs   = _vs_get_jobs(user_id, since=since)
+        total  = _vs_job_count(user_id)
+        status = _vs_get_status(user_id)
+
+        # If no new jobs and thread is just paused (buffer full), tell the
+        # client to stop polling — it already has everything available.
+        # It should resume only when the user consumes enough cards.
+        if not jobs and status == "processing":
+            status = "buffered"
+
+        return jsonify({"jobs": jobs, "total": total, "status": status}), 200
+
+    except Exception as e:
+        print(f"[vetting-results] Error: {e}")
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
     app.run(debug=True)

@@ -489,36 +489,6 @@ export default function MultiStepResumeForm({ userId }: MultiStepResumeFormProps
           {/* STEP 1: PROFILE */}
           {currentStep === 0 && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="md:col-span-2">
-                <label className="text-sm font-medium">Profile Picture</label>
-                <div className="mt-2 flex items-center gap-3">
-                  {form.profile.profilePictureUrl ? (
-                    <img
-                      src={form.profile.profilePictureUrl}
-                      alt="profile"
-                      className="w-14 h-14 rounded-full object-cover"
-                    />
-                  ) : (
-                    <div className="w-14 h-14 rounded-full bg-muted" />
-                  )}
-                  <div>
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={onProfilePicChange}
-                    />
-                    <button
-                      type="button"
-                      className="px-3 py-1.5 text-sm border rounded-md hover:bg-accent"
-                      onClick={() => fileInputRef.current?.click()}
-                    >
-                      Upload
-                    </button>
-                  </div>
-                </div>
-              </div>
               <div>
                 <label className="text-sm font-medium">Name *</label>
                 <input
