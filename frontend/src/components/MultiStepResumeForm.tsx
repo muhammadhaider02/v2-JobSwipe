@@ -294,9 +294,10 @@ export default function MultiStepResumeForm({ userId }: MultiStepResumeFormProps
         const result = await response.json();
         console.log("Profile saved:", result);
 
-        // Redirect to recommendations
-        const skillsParam = encodeURIComponent(JSON.stringify(form.skills));
-        window.location.href = `/recommendations?skills=${skillsParam}`;
+        // Store skills in sessionStorage so recommendations page picks them up
+        // This keeps the URL clean (/recommendations instead of /recommendations?skills=...)
+        sessionStorage.setItem('userSkills', JSON.stringify(form.skills));
+        window.location.href = '/recommendations';
       } catch (error) {
         console.error("Error saving profile:", error);
         alert("Failed to save profile. Please try again.");

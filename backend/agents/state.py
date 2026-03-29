@@ -45,7 +45,7 @@ class AgentState(TypedDict):
     current_page: int
     
     # Vetting Officer outputs
-    vetted_jobs: List[Dict[str, Any]]  # Each job has: job_id, match_score, reasoning, confidence
+    vetted_jobs: List[Dict[str, Any]]  # Each job has: job_id, match_score, confidence
     
     # Campaign Manager outputs
     target_job: Optional[Dict[str, Any]]  # Single job for application
@@ -116,7 +116,6 @@ class VettedJob(TypedDict):
     job_id: str
     job_data: JobData
     match_score: float  # 0-1 similarity score
-    reasoning: str  # LLM-generated reasoning
     confidence: str  # "high" | "medium" | "low"
     recommendation: str  # "strong_fit" | "moderate_fit" | "weak_fit"
     skill_gaps: List[str]

@@ -1157,8 +1157,8 @@ def vet_jobs_endpoint():
             "returned_jobs": len(vetted_jobs),
             "top_match_score": vetted_jobs[0]["match_score"] if vetted_jobs else 0,
             "average_match_score": sum(j["match_score"] for j in vetted_jobs) / len(vetted_jobs) if vetted_jobs else 0,
-            "high_confidence_matches": sum(1 for j in vetted_jobs if j["match_score"] >= 0.75),
-            "medium_confidence_matches": sum(1 for j in vetted_jobs if 0.60 <= j["match_score"] < 0.75)
+            "high_confidence_matches": sum(1 for j in vetted_jobs if j["match_score"] >= 0.80),
+            "medium_confidence_matches": sum(1 for j in vetted_jobs if 0.70 <= j["match_score"] < 0.80)
         }
         
         print(f"\n==== PIPELINE COMPLETE ====")
@@ -1308,7 +1308,7 @@ def _background_vetting_loop(user_id: str, roles: List[str]) -> None:
     Flow:
       1. Load a batch of DB jobs matching any of the provided roles
       2. Skip already-seen jobs (in-memory set)
-      3. Vet each job; push approved jobs (score >= 0.60) to in-memory list
+      3. Vet each job; push approved jobs (score >= 0.70) to in-memory list
       4. Pause when approved_count >= VETTING_TARGET
       5. Resume when frontend polls (last_poll timestamp refreshes)
       6. Stop when DB is exhausted or no poll for VETTING_IDLE_TTL seconds
@@ -1327,7 +1327,6 @@ def _background_vetting_loop(user_id: str, roles: List[str]) -> None:
             calculate_location_fit,
             calculate_final_score,
             _compute_years_from_experience,
-            _build_reasoning,
             MIN_SCORE_THRESHOLD,
         )
 
@@ -1428,15 +1427,13 @@ def _background_vetting_loop(user_id: str, roles: List[str]) -> None:
                 if final_score < MIN_SCORE_THRESHOLD:
                     continue
 
-                confidence = "high" if final_score >= 0.75 else "medium" if final_score >= 0.60 else "low"
-                reasoning  = _build_reasoning(final_score, matching_skills, skill_gaps, user_profile)
+                confidence = "high" if final_score >= 0.80 else "medium" if final_score >= 0.70 else "low"
 
                 vetted = {
                     "job_id":          job_id_key,
                     "job_data":        job,
                     "match_score":     final_score,
                     "confidence":      confidence,
-                    "reasoning":       reasoning,
                     "skill_gaps":      skill_gaps,
                     "matching_skills": matching_skills,
                 }

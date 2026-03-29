@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -87,11 +87,10 @@ const POPULAR_CHANNELS = [
 ];
 
 export default function LearningPreferencesPage() {
-  const searchParams = useSearchParams();
   const router = useRouter();
-  const missingSkills = searchParams.get("skills");
 
   const [skills, setSkills] = useState<string[]>([]);
+  const [skillsLoaded, setSkillsLoaded] = useState(false);
   const [preferences, setPreferences] = useState<LearningPreferences>({
     knowledgeLevel: "beginner",
     timeCommitment: "medium",
@@ -104,15 +103,17 @@ export default function LearningPreferencesPage() {
   });
 
   useEffect(() => {
-    if (missingSkills) {
+    // Skills are always passed via sessionStorage — never via URL params
+    const stored = sessionStorage.getItem('currentLearningSkills');
+    if (stored) {
       try {
-        const parsedSkills = JSON.parse(decodeURIComponent(missingSkills));
-        setSkills(parsedSkills);
+        setSkills(JSON.parse(stored));
       } catch (e) {
-        console.error("Error parsing skills:", e);
+        console.error("Error parsing skills from sessionStorage:", e);
       }
     }
-  }, [missingSkills]);
+    setSkillsLoaded(true);
+  }, []);
 
   const toggleChannel = (channelName: string) => {
     setPreferences((prev) => ({
@@ -124,15 +125,16 @@ export default function LearningPreferencesPage() {
   };
 
   const handleContinue = () => {
-    // Store preferences in session storage for use in learning resources page
+    // Store preferences in sessionStorage for use in learning resources page
     sessionStorage.setItem("learningPreferences", JSON.stringify(preferences));
 
-    // Navigate to learning resources with skills
-    const skillsParam = encodeURIComponent(JSON.stringify(skills));
-    router.push(`/learning-resources?skills=${skillsParam}`);
+    // Pass skills to the next page via sessionStorage — clean URL
+    sessionStorage.setItem('learningResourcesSkills', JSON.stringify(skills));
+    router.push('/learning-resources');
   };
 
-  if (!missingSkills || skills.length === 0) {
+  // Wait until we've checked sessionStorage before showing the empty state
+  if (skillsLoaded && skills.length === 0) {
     return (
       <div className="flex-1 w-full bg-gradient-to-br from-background to-muted/20 flex items-center justify-center">
         <Card className="p-8 max-w-md text-center">

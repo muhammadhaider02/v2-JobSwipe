@@ -129,7 +129,6 @@ def test_scout_and_enricher():
                 print(f"   Matching Skills: {', '.join(vetted_job['matching_skills'][:5])}")
                 if vetted_job['skill_gaps']:
                     print(f"   Skill Gaps: {', '.join(vetted_job['skill_gaps'][:3])}")
-                print(f"   Reasoning: {vetted_job['reasoning'][:150]}...")
                 print()
         
         # Show enriched sample (for reference)

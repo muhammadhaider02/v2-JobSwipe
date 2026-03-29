@@ -251,9 +251,8 @@ export default function RecommendationsPage() {
     // Store the skills being learned in sessionStorage
     sessionStorage.setItem('currentLearningSkills', JSON.stringify(missingSkills));
 
-    // Always go through preferences page first, then to learning-resources
-    const skillsParam = encodeURIComponent(JSON.stringify(missingSkills));
-    router.push(`/learning-preferences?skills=${skillsParam}`);
+    // Navigate cleanly — /learning-preferences reads skills from sessionStorage
+    router.push('/learning-preferences');
   };
 
   if (loading) {
@@ -289,7 +288,7 @@ export default function RecommendationsPage() {
           href="/onboarding"
           className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
         >
-          <ArrowLeft className="w-4 h-4" /> Back to Form
+          <ArrowLeft className="w-4 h-4" /> Back
         </Link>
       </div>
       <div className="flex-1 w-full pb-12 pt-0 px-4">

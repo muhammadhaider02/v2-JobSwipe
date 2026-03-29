@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { useSearchParams, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -44,9 +44,7 @@ type LearningPreferences = {
 };
 
 export default function LearningResourcesPage() {
-  const searchParams = useSearchParams();
   const router = useRouter();
-  const missingSkills = searchParams.get("skills");
 
   const [resources, setResources] = useState<SkillResources[]>([]);
   const [loading, setLoading] = useState(false);
@@ -55,36 +53,14 @@ export default function LearningResourcesPage() {
   const [preferences, setPreferences] = useState<LearningPreferences | null>(null);
 
   useEffect(() => {
-    // Load preferences from session storage
-    const missingSkills = searchParams.get("skills");
-    const prefsParam = searchParams.get("preferences");
+    // Skills are always passed via sessionStorage — never via URL params
+    const stored = sessionStorage.getItem('learningResourcesSkills');
+    const skills: string[] | null = stored ? JSON.parse(stored) : null;
 
-    // Try to get skills from URL first, then from sessionStorage
-    let skills: string[] | null = null;
-
-    if (missingSkills) {
-      skills = JSON.parse(decodeURIComponent(missingSkills));
-      // Store in sessionStorage
-      sessionStorage.setItem('learningResourcesSkills', JSON.stringify(skills));
-    } else {
-      // Try to restore from sessionStorage
-      const stored = sessionStorage.getItem('learningResourcesSkills');
-      if (stored) {
-        skills = JSON.parse(stored);
-      }
-    }
-
-    // Handle preferences
-    if (prefsParam) {
-      const prefs = JSON.parse(decodeURIComponent(prefsParam));
-      setPreferences(prefs);
-      sessionStorage.setItem('learningPreferences', JSON.stringify(prefs));
-    } else {
-      // Try to restore preferences from sessionStorage
-      const storedPrefs = sessionStorage.getItem('learningPreferences');
-      if (storedPrefs) {
-        setPreferences(JSON.parse(storedPrefs));
-      }
+    // Load preferences from sessionStorage
+    const storedPrefs = sessionStorage.getItem('learningPreferences');
+    if (storedPrefs) {
+      setPreferences(JSON.parse(storedPrefs));
     }
 
     // Check if we have cached resources
@@ -99,7 +75,6 @@ export default function LearningResourcesPage() {
         skills.every((skill: string) => cachedSkills.includes(skill));
 
       if (skillsMatch) {
-        // Use cached data if skills match
         setResources(cached.resources);
         if (cached.selectedSkill) {
           setSelectedSkill(cached.selectedSkill);
@@ -112,7 +87,7 @@ export default function LearningResourcesPage() {
     if (skills) {
       fetchLearningResources(skills);
     }
-  }, [searchParams]);
+  }, []);
 
   const fetchLearningResources = async (skills: string[]) => {
     setLoading(true);
@@ -297,16 +272,7 @@ export default function LearningResourcesPage() {
     <div className="flex-1 w-full flex flex-col relative bg-gradient-to-br from-background to-muted/20">
       <div className="absolute top-4 left-6 z-10">
         <button
-          onClick={() => {
-            const storedSkills = sessionStorage.getItem('learningResourcesSkills');
-            if (storedSkills) {
-              const skills = JSON.parse(storedSkills);
-              const skillsParam = encodeURIComponent(JSON.stringify(skills));
-              window.location.href = `/learning-preferences?skills=${skillsParam}`;
-            } else {
-              router.back();
-            }
-          }}
+          onClick={() => router.push('/learning-preferences')}
           className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
         >
           <ArrowLeft className="w-4 h-4" /> Back

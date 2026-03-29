@@ -69,18 +69,16 @@ function ResultModal({
 
       {/* Modal card */}
       <div
-        className={`
-          relative z-10 w-full max-w-md rounded-2xl border bg-card shadow-2xl
-          animate-in fade-in zoom-in-95 duration-200
-          ${passed
-            ? 'border-green-500/60 ring-1 ring-green-500/20'
-            : 'border-red-500/60 ring-1 ring-red-500/20'}
-        `}
+        className="relative z-10 w-full max-w-md rounded-2xl bg-card shadow-2xl animate-in fade-in zoom-in-95 duration-200"
+        style={{
+          borderTop:    '1px solid rgba(255,255,255,0.07)',
+          borderRight:  '1px solid rgba(255,255,255,0.07)',
+          borderBottom: '1px solid rgba(255,255,255,0.07)',
+          borderLeft:   passed
+            ? '4px solid rgba(34,197,94,0.85)'
+            : '4px solid rgba(239,68,68,0.85)',
+        }}
       >
-        {/* Coloured top stripe */}
-        <div
-          className={`h-1.5 w-full rounded-t-2xl ${passed ? 'bg-green-500' : 'bg-red-500'}`}
-        />
 
         <div className="p-6">
           {/* Icon + title */}
@@ -90,13 +88,13 @@ function ResultModal({
                 ${passed ? 'bg-green-500/15' : 'bg-red-500/15'}`}
             >
               {passed
-                ? <CheckCircle2 className="w-6 h-6 text-green-500" />
-                : <XCircle className="w-6 h-6 text-red-500" />}
+                ? <CheckCircle2 className="w-6 h-6 text-green-400" />
+                : <XCircle className="w-6 h-6 text-red-400" />}
             </div>
 
             <div>
               <h2 className="text-xl font-bold leading-tight">
-                {passed ? 'You Passed!' : 'Not Quite Yet'}
+                {passed ? 'You Passed!' : 'Room to Grow'}
               </h2>
               <p className="text-sm text-muted-foreground mt-0.5">
                 {skill} Quiz Results
@@ -105,12 +103,12 @@ function ResultModal({
           </div>
 
           {/* Score display */}
-          <div className={`rounded-xl p-4 mb-5 ${passed ? 'bg-green-500/8' : 'bg-red-500/8'}`}>
+          <div className={`rounded-xl p-4 mb-5 ${passed ? 'bg-green-500/10' : 'bg-red-500/10'}`}>
             <div className="flex items-end justify-between mb-2">
               <span className="text-sm text-muted-foreground">Your score</span>
               <span
                 className={`text-3xl font-bold tabular-nums
-                  ${passed ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}
+                  ${passed ? 'text-green-400' : 'text-red-400'}`}
               >
                 {evaluation.score_percentage}%
               </span>
@@ -134,7 +132,7 @@ function ResultModal({
           <p className="text-sm text-muted-foreground mb-6 leading-relaxed">
             {passed
               ? 'Great work! You\'ve demonstrated solid knowledge of this skill. Mark it as learned to update your profile.'
-              : 'Don\'t worry — review the feedback below, study the resources, and try again when you\'re ready.'}
+              : 'Go through the resources below, then come back and try again.'}
           </p>
 
           {/* Action buttons */}
@@ -271,8 +269,8 @@ export default function SkillQuizPage() {
   };
 
   const handleLearningResources = () => {
-    const skillsParam = encodeURIComponent(JSON.stringify([skill]));
-    router.push(`/learning-preferences?skills=${skillsParam}`);
+    sessionStorage.setItem('currentLearningSkills', JSON.stringify([skill]));
+    router.push('/learning-preferences');
   };
 
   const renderQuestion = (question: QuizQuestion, index: number) => {
@@ -282,10 +280,10 @@ export default function SkillQuizPage() {
       <Card
         key={question.id}
         className={`bg-card border rounded-xl shadow-sm ${feedback
-            ? feedback.correct
-              ? 'border-green-500/50'
-              : 'border-red-500/50'
-            : ''
+          ? feedback.correct
+            ? 'border-green-500/50'
+            : 'border-red-500/50'
+          : ''
           }`}
       >
         <CardHeader>

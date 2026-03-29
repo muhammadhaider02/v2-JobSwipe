@@ -459,24 +459,6 @@ def calculate_final_score(scores: Dict[str, float]) -> float:
     return final_score
 
 
-def _build_reasoning(final_score: float, matching_skills: List[str], 
-                     skill_gaps: List[str], user_profile: Dict[str, Any]) -> str:
-    """Build a fast template-based reasoning string. No LLM calls."""
-    if final_score >= 0.85:
-        strength = "strong match"
-    elif final_score >= 0.70:
-        strength = "moderate match"
-    else:
-        strength = "potential opportunity"
-
-    gap_text = ""
-    if skill_gaps:
-        gap_text = f" You'll need to develop {', '.join(skill_gaps[:3])}."
-
-    skills_text = ', '.join(matching_skills[:3]) if matching_skills else "your background"
-    roles_text = ', '.join(user_profile.get('previous_roles', ['your field'])[:2])
-    return f"This role is a {strength} based on your {skills_text} experience.{gap_text} Your background in {roles_text} aligns well with the requirements."
-
 
 def _compute_years_from_experience(experience: list) -> int:
     """
@@ -593,9 +575,8 @@ def vetting_officer_node(state: AgentState) -> Dict[str, Any]:
        - Experience Alignment (15%)
        - Location Fit (5%)
     3. Filter jobs scoring < 0.60 threshold
-    4. Generate LLM reasoning for each match
-    5. Sort by match score descending
-    6. Update state with vetted_jobs
+    4. Sort by match score descending
+    5. Update state with vetted_jobs
     
     Args:
         state: Current agent state with enriched jobs
@@ -717,11 +698,8 @@ def vetting_officer_node(state: AgentState) -> Dict[str, Any]:
                 filtered_count += 1
                 continue
             
-            # Build reasoning (template-based, no LLM call)
-            reasoning = _build_reasoning(final_score, matching_skills, skill_gaps, user_profile)
-            
             # Determine confidence level
-            if final_score >= 0.85:
+            if final_score >= 0.80:
                 confidence = "high"
                 recommendation = "strong_fit"
             elif final_score >= 0.70:
@@ -736,7 +714,6 @@ def vetting_officer_node(state: AgentState) -> Dict[str, Any]:
                 "job_id": job.get("job_id", ""),
                 "job_data": job,
                 "match_score": final_score,
-                "reasoning": reasoning,
                 "confidence": confidence,
                 "recommendation": recommendation,
                 "skill_gaps": skill_gaps,
@@ -764,8 +741,8 @@ def vetting_officer_node(state: AgentState) -> Dict[str, Any]:
 
 Scoring Breakdown:
   • Jobs passed threshold (≥{MIN_SCORE_THRESHOLD:.0%}): {len(vetted_jobs)}
-  • High confidence matches (≥75%): {sum(1 for j in vetted_jobs if j['match_score'] >= 0.75)}
-  • Medium confidence (60-75%): {sum(1 for j in vetted_jobs if 0.60 <= j['match_score'] < 0.75)}
+  • High confidence matches (≥80%): {sum(1 for j in vetted_jobs if j['match_score'] >= 0.80)}
+  • Medium confidence (70-80%): {sum(1 for j in vetted_jobs if 0.70 <= j['match_score'] < 0.80)}
   • Jobs filtered out: {filtered_count}
 
 Top matches sorted by relevance and ready for review."""
