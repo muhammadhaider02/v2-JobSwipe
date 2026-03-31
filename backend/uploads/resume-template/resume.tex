@@ -1,0 +1,103 @@
+\documentclass[9pt]{resume}
+
+\usepackage[left=0.4in,top=0.4in,right=0.4in,bottom=0.4in]{geometry}
+\newcommand{\tab}[1]{\hspace{.2667\textwidth}\rlap{#1}}
+\newcommand{\itab}[1]{\hspace{0em}\rlap{#1}}
+\name{((personal_info.name))}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=black,
+  urlcolor=black,
+  citecolor=black
+}
+
+\usepackage{fontawesome5}
+\usepackage{hyperref}
+\usepackage[normalem]{ulem}
+\usepackage{xcolor}
+\usepackage[dvipsnames]{xcolor}
+\usepackage{enumitem}
+\usepackage[sfdefault]{inter}
+\newcommand{\bluebf}[1]{\textbf{\textcolor{RoyalBlue}{#1}}}
+\newcommand{\blueicon}[1]{\textcolor{RoyalBlue}{#1}}
+\renewcommand\labelitemi{\scriptsize$\bullet$}
+\setlist[itemize]{leftmargin=*}
+\setlength{\parskip}{4pt}
+
+\begin{document}
+\small
+
+\vspace{-1.6em}
+
+\begin{center}
+  \href{mailto:((personal_info.email))}{\blueicon{\faEnvelope}\hspace{0.3em} ((personal_info.email))} \quad
+  \blueicon{\faPhone}\hspace{0.3em} ((personal_info.phone)) \quad
+  \blueicon{\faMapMarker*}\hspace{0.3em} ((personal_info.location)) \\[0.5em]
+  \href{((personal_info.linkedin))}{\blueicon{\faLinkedin}\hspace{0.3em} ((personal_info.linkedin | replace("https://", "")))}((* if personal_info.github *)) \quad
+  \href{((personal_info.github))}{\blueicon{\faGithub}\hspace{0.3em} ((personal_info.github | replace("https://", "")))}((* endif *))((* if personal_info.portfolio *)) \quad
+  \href{((personal_info.portfolio))}{\blueicon{\faGlobe}\hspace{0.3em} ((personal_info.portfolio | replace("https://", "")))}((* endif *))
+\end{center}
+
+%----------------------------------------------------------------------------------------
+\vspace{-0.25em}
+\begin{rSection}{Education}
+\vspace{-0.35em}
+
+((* for edu in education *))
+\textbf{((edu.degree))} \hfill ((edu.start_year)) - ((edu.end_year)) \\
+((edu.institution))
+((* endfor *))
+
+\end{rSection}
+
+%----------------------------------------------------------------------------------------
+\vspace{-0.90em}
+\begin{rSection}{PROFESSIONAL EXPERIENCE}
+\vspace{-0.45em}
+
+((* for job in experience *))
+\textbf{((job.role))} \hfill ((job.duration))\\
+\textbf{((job.company))}
+\begin{itemize}
+\itemsep -1.5pt {}
+((* for line in job.description.split('\n') *))
+((* if line.strip() *))
+    \item ((line.strip().lstrip('•').strip()))
+((* endif *))
+((* endfor *))
+\end{itemize}
+
+((* endfor *))
+\end{rSection}
+
+%----------------------------------------------------------------------------------------
+\vspace{-0.90em}
+\begin{rSection}{PROJECTS}
+\vspace{-0.95em}
+
+((* for project in projects *))
+\vspace{-0.25em}
+\item \textbf{((project.name))}((* if project.link *)) \href{((project.link))}{\faGithub}((* endif *))
+\begin{itemize}
+\itemsep -1.75pt {}
+((* for line in project.description.split('\n') *))
+((* if line.strip() *))
+    \item ((line.strip().lstrip('•').strip()))
+((* endif *))
+((* endfor *))
+\end{itemize}
+
+((* endfor *))
+\end{rSection}
+
+%----------------------------------------------------------------------------------------
+\vspace{-0.90em}
+\begin{rSection}{TECHNICAL SKILLS}
+\vspace{-0.35em}
+
+((skills | join(" $|$ ")))
+
+\end{rSection}
+
+\end{document}

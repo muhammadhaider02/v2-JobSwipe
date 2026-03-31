@@ -2,8 +2,8 @@ import Link from 'next/link';
 
 export default function HomePage() {
   return (
-    <div className="flex-1 flex flex-col gap-20 items-center">
-      <div className="flex-1 flex flex-col gap-20 max-w-5xl p-5">
+    <div className="flex-1 flex flex-col gap-20 items-center justify-center">
+      <div className="flex flex-col gap-20 max-w-5xl p-5">
         <div className="flex flex-col gap-8 items-center text-center">
           <h1 className="text-4xl font-bold tracking-tight sm:text-6xl">
             Welcome to <span className="text-primary">JobSwipe</span>

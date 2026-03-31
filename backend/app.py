@@ -24,6 +24,7 @@ from routes.resume_optimization_routes import resume_optimization_bp
 from routes.cover_letter_routes import cover_letter_bp
 from routes.learning_resources import learning_resources_bp
 from routes.quiz_routes import quiz_bp
+from routes.resume_pdf_routes import resume_pdf_bp
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 25 * 1024 * 1024  # 25MB upload cap
@@ -43,6 +44,7 @@ CORS(
         "/generate-cover-letter": {"origins": "http://localhost:3000"},
         "/prepare-application-materials": {"origins": "http://localhost:3000"},
         "/application-materials/save-draft": {"origins": "http://localhost:3000"},
+        "/generate-resume-pdf": {"origins": "http://localhost:3000"},
     },
     supports_credentials=False,
 )
@@ -61,6 +63,7 @@ app.register_blueprint(resume_optimization_bp)
 app.register_blueprint(cover_letter_bp)
 app.register_blueprint(learning_resources_bp)
 app.register_blueprint(quiz_bp)
+app.register_blueprint(resume_pdf_bp)
 
 
 def _normalize_profile_payload(data):

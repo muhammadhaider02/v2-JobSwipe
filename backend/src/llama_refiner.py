@@ -701,13 +701,13 @@ PROJECTS_SYSTEM_PROMPT = (
     "CRITICAL REQUIREMENTS:\n"
     "- Extract EVERY project listed. Do not skip any.\n"
     "- 'name' is REQUIRED — the project title.\n"
-    "- 'description' is REQUIRED — a concise summary of what the project does/did. Preserve technical details.\n"
+    "- 'description' is REQUIRED — extract the details as bullet points separated by newline characters (\\n). Do NOT write a single paragraph. Preserve technical details.\n"
     "- 'link' is OPTIONAL — only fill if a URL (GitHub, live demo, etc.) is explicitly present next to this project. Leave empty string otherwise.\n"
     "- Never fabricate project names, descriptions, or links not present in the input.\n"
     "- Output ONLY a single top-level JSON value matching the schema (no prose, no markdown, no extra characters).\n\n"
     "Schema:\n"
     + json.dumps(PROJECTS_SCHEMA, indent=2) +
-    "\n\nREMEMBER: Extract ALL projects with complete name and description."
+    "\n\nREMEMBER: Extract ALL projects with complete name and description separated by \\n for bullet points."
 )
 
 

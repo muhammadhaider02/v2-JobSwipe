@@ -5,7 +5,7 @@ import { useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, FileText, ChevronDown, Check, Loader2, RefreshCw } from "lucide-react";
+import { ArrowLeft, FileText, ChevronDown, Check, Loader2, X, Download } from "lucide-react";
 import Link from "next/link";
 
 const BACKEND_BASE = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
@@ -17,7 +17,6 @@ type TemplateItem = {
   display_name: string;
 };
 
-// Fix #1: multi-step loading messages that cycle every 3 seconds
 const LOADING_STEPS = [
   "Analyzing job requirements…",
   "Optimizing resume bullets…",
@@ -28,6 +27,34 @@ const LOADING_STEPS = [
 function stringifyResume(value: any): string {
   if (!value) return "{}";
   try {
+    if (typeof value === "object" && !Array.isArray(value)) {
+      const preferredOrder = [
+        "personal_info",
+        "personal_information",
+        "contact",
+        "education",
+        "experience",
+        "projects",
+        "certifications",
+        "skills"
+      ];
+
+      const orderedObj: Record<string, any> = {};
+
+      for (const key of preferredOrder) {
+        if (key in value) {
+          orderedObj[key] = value[key];
+        }
+      }
+
+      for (const key in value) {
+        if (!(key in orderedObj)) {
+          orderedObj[key] = value[key];
+        }
+      }
+      return JSON.stringify(orderedObj, null, 2);
+    }
+
     return JSON.stringify(value, null, 2);
   } catch {
     return "{}";
@@ -48,23 +75,27 @@ export default function JobApplicationMaterialsPage() {
   const [coverLetterText, setCoverLetterText] = useState("");
 
   const [loading, setLoading] = useState(true);
-  const [loadingStep, setLoadingStep] = useState(0); // Fix #1
+  const [loadingStep, setLoadingStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
-  // Fix #3: debounce auto-save refs and state
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
   const savedFadeRef = useRef<NodeJS.Timeout | null>(null);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
 
-  // Fix #4: regenerate resume loading state
   const [regenResumeLoading, setRegenResumeLoading] = useState(false);
+
+  // PDF modal state
+  const [pdfModalOpen, setPdfModalOpen] = useState(false);
+  const [pdfBlobUrl, setPdfBlobUrl] = useState<string | null>(null);
+  const [pdfFileName, setPdfFileName] = useState("Resume.pdf");
+  const [pdfLoading, setPdfLoading] = useState(false);
+  const pdfBlobRef = useRef<string | null>(null);
 
   const title = useMemo(() => {
     if (!job) return "Job";
     return job.title || job.job_title || "Job";
   }, [job]);
 
-  // Fix #1: cycle loading messages while the LLM is running
   useEffect(() => {
     if (!loading) return;
     const interval = setInterval(() => {
@@ -73,10 +104,8 @@ export default function JobApplicationMaterialsPage() {
     return () => clearInterval(interval);
   }, [loading]);
 
-  // Fix #3: auto-save with 3-second debounce
   const triggerAutoSave = useCallback(
     (resume: string, coverLetter: string) => {
-      // No application record yet — nothing to save to
       if (!applicationId || !userId) return;
 
       if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -85,7 +114,6 @@ export default function JobApplicationMaterialsPage() {
       debounceRef.current = setTimeout(async () => {
         setSaveStatus("saving");
         try {
-          // Don't save if the resume textarea has broken JSON (user is mid-edit)
           let parsedResume: any = null;
           try {
             parsedResume = JSON.parse(resume);
@@ -106,7 +134,6 @@ export default function JobApplicationMaterialsPage() {
           });
 
           setSaveStatus("saved");
-          // Fade the "Saved" indicator out after 2 seconds
           savedFadeRef.current = setTimeout(() => setSaveStatus("idle"), 2000);
         } catch {
           setSaveStatus("idle");
@@ -116,11 +143,12 @@ export default function JobApplicationMaterialsPage() {
     [applicationId, userId]
   );
 
-  // Cleanup timers on unmount
   useEffect(() => {
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
       if (savedFadeRef.current) clearTimeout(savedFadeRef.current);
+      // Revoke any lingering blob URL to free memory
+      if (pdfBlobRef.current) URL.revokeObjectURL(pdfBlobRef.current);
     };
   }, []);
 
@@ -144,7 +172,6 @@ export default function JobApplicationMaterialsPage() {
         const uid = user.id;
         setUserId(uid);
 
-        // Fetch job info and templates in parallel
         const [jobRes, templatesRes] = await Promise.all([
           fetch(`${BACKEND_BASE}/api/jobs/${encodeURIComponent(jobId)}`),
           fetch(`${BACKEND_BASE}/cover-letter-templates`),
@@ -154,7 +181,6 @@ export default function JobApplicationMaterialsPage() {
           const jobData = await jobRes.json();
           setJob(jobData?.job || null);
         } else {
-          // Fall back to session storage if the API call fails
           const cached = sessionStorage.getItem("vettedJobs");
           const parsed = cached ? JSON.parse(cached) : [];
           const fallback = parsed.find((item: any) => item?.job_id === jobId);
@@ -168,7 +194,6 @@ export default function JobApplicationMaterialsPage() {
           if (templateList.length > 0) setCoverLetterTemplate(templateList[0].name);
         }
 
-        // Fix #2: Check the DB first — skip the 15-second LLM call if materials exist
         const existingRes = await fetch(
           `${BACKEND_BASE}/application-materials/${encodeURIComponent(jobId)}?user_id=${uid}`
         );
@@ -179,11 +204,10 @@ export default function JobApplicationMaterialsPage() {
             setApplicationId(existingData.application_id ?? null);
             setResumeJsonText(stringifyResume(existingData.optimized_resume));
             setCoverLetterText(existingData.cover_letter || "");
-            return; // Done — no LLM call needed ✓
+            return;
           }
         }
 
-        // No saved materials — trigger full AI generation
         const defaultSections = ["summary", "experience", "skills"];
         const prepareRes = await fetch(`${BACKEND_BASE}/prepare-application-materials`, {
           method: "POST",
@@ -218,7 +242,6 @@ export default function JobApplicationMaterialsPage() {
     if (jobId) bootstrap();
   }, [jobId]);
 
-  // Regenerate cover letter with selected template
   async function regenerateCoverLetter() {
     if (!userId || !coverLetterTemplate) return;
     setError(null);
@@ -245,7 +268,6 @@ export default function JobApplicationMaterialsPage() {
     }
   }
 
-  // Fix #4: Force a fresh LLM re-generation of the resume only
   async function regenerateResume() {
     if (!userId || regenResumeLoading) return;
     setRegenResumeLoading(true);
@@ -268,7 +290,6 @@ export default function JobApplicationMaterialsPage() {
       if (data?.application_id) setApplicationId(data.application_id);
       const newResume = stringifyResume(data?.materials?.optimized_resume);
       setResumeJsonText(newResume);
-      // Persist the fresh version immediately via auto-save
       triggerAutoSave(newResume, coverLetterText);
     } catch (e: any) {
       setError(e?.message || "Failed to regenerate resume.");
@@ -277,7 +298,64 @@ export default function JobApplicationMaterialsPage() {
     }
   }
 
-  // Fix #1: multi-step loading screen
+  async function viewPdf() {
+    setPdfLoading(true);
+    setError(null);
+    try {
+      let parsedResume: any;
+      try {
+        parsedResume = JSON.parse(resumeJsonText);
+      } catch {
+        setError("The resume JSON is not valid. Please fix any syntax errors before generating a PDF.");
+        return;
+      }
+
+      const toPascalCase = (s: string) =>
+        s.toLowerCase().split(/[\s_\-]+/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join('');
+
+      let userName = "User";
+      const pInfo = parsedResume.personal_info || parsedResume.contact || parsedResume.personal_information || {};
+      if (pInfo.name) {
+        userName = toPascalCase(pInfo.name.trim());
+      }
+      const companyName = job?.company ? toPascalCase(job.company.trim()) : "Company";
+      const fileName = `${companyName}-${userName}-Resume.pdf`;
+      setPdfFileName(fileName);
+
+      const res = await fetch(`${BACKEND_BASE}/generate-resume-pdf`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ resume_json: parsedResume }),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData?.error || `Server returned ${res.status}`);
+      }
+
+      const blob = await res.blob();
+
+      // Wrap in a File object. Some browsers (like Chrome) respect the File name when saving via the native PDF viewer button!
+      let fileToURL: Blob | File = blob;
+      try {
+        fileToURL = new File([blob], fileName, { type: "application/pdf" });
+      } catch {
+        // Fallback for older browsers
+      }
+
+      // Revoke the old blob URL before creating a new one
+      if (pdfBlobRef.current) URL.revokeObjectURL(pdfBlobRef.current);
+      const url = URL.createObjectURL(fileToURL);
+      pdfBlobRef.current = url;
+      setPdfBlobUrl(url);
+      setPdfModalOpen(true);
+    } catch (e: any) {
+      setError(e?.message || "Failed to generate PDF.");
+    } finally {
+      setPdfLoading(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex-1 w-full bg-gradient-to-br from-background to-muted/20 flex flex-col relative items-center justify-center min-h-[50vh]">
@@ -291,7 +369,6 @@ export default function JobApplicationMaterialsPage() {
 
   return (
     <div className="flex-1 w-full bg-gradient-to-br from-background to-muted/20 flex flex-col relative">
-      {/* Back button */}
       <div className="absolute top-4 left-6 z-10">
         <Link
           href="/jobs"
@@ -301,7 +378,6 @@ export default function JobApplicationMaterialsPage() {
         </Link>
       </div>
 
-      {/* Fix #3: Save status indicator — top-right corner */}
       {saveStatus !== "idle" && (
         <div className="absolute top-4 right-6 z-10 flex items-center gap-1.5 text-xs text-muted-foreground">
           {saveStatus === "saving" ? (
@@ -320,7 +396,6 @@ export default function JobApplicationMaterialsPage() {
 
       <div className="flex-1 w-full pb-8 pt-0 px-4">
         <div className="max-w-6xl mx-auto mt-0 lg:mt-2 space-y-6">
-          {/* Header */}
           <div className="mb-5">
             <div className="flex items-center gap-3 mb-2">
               <FileText className="w-8 h-8 text-primary" />
@@ -335,24 +410,35 @@ export default function JobApplicationMaterialsPage() {
             </div>
           )}
 
-          {/* Resume Card — Fix #4: Regenerate button in card header */}
           <Card>
             <CardHeader className="pb-3 flex flex-row items-center justify-between">
               <CardTitle>Optimized Resume</CardTitle>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={regenerateResume}
-                disabled={regenResumeLoading || !userId}
-                className="flex items-center gap-1.5"
-              >
-                {regenResumeLoading ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                ) : (
-                  <RefreshCw className="w-3.5 h-3.5" />
-                )}
-                Regenerate
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  className="flex items-center gap-1.5 h-10"
+                  onClick={viewPdf}
+                  disabled={pdfLoading}
+                >
+                  {pdfLoading ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <FileText className="w-3.5 h-3.5" />
+                  )}
+                  Generate PDF
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={regenerateResume}
+                  disabled={regenResumeLoading || !userId}
+                  className="flex items-center gap-1.5 h-10"
+                >
+                  {regenResumeLoading && (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  )}
+                  Regenerate
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
               <textarea
@@ -360,13 +446,12 @@ export default function JobApplicationMaterialsPage() {
                 value={resumeJsonText}
                 onChange={(e) => {
                   setResumeJsonText(e.target.value);
-                  triggerAutoSave(e.target.value, coverLetterText); // Fix #3
+                  triggerAutoSave(e.target.value, coverLetterText);
                 }}
               />
             </CardContent>
           </Card>
 
-          {/* Cover Letter Card */}
           <Card>
             <CardHeader className="pb-3">
               <CardTitle>Optimized Cover Letter</CardTitle>
@@ -393,7 +478,7 @@ export default function JobApplicationMaterialsPage() {
                   onClick={regenerateCoverLetter}
                   disabled={!coverLetterTemplate || !userId}
                 >
-                  Generate
+                  Regenerate
                 </Button>
               </div>
 
@@ -410,13 +495,13 @@ export default function JobApplicationMaterialsPage() {
 
           <div className="flex justify-end gap-3 w-full pb-0 -mt-2">
             <button
-              onClick={() => {}}
+              onClick={() => { }}
               className="inline-flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground text-sm rounded-lg font-medium transition-all shadow-sm hover:shadow-md"
             >
               Self Apply
             </button>
             <button
-              onClick={() => {}}
+              onClick={() => { }}
               className="inline-flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground text-sm rounded-lg font-medium transition-all shadow-sm hover:shadow-md"
             >
               Auto Apply
@@ -424,6 +509,45 @@ export default function JobApplicationMaterialsPage() {
           </div>
         </div>
       </div>
+
+      {/* PDF viewer modal */}
+      {pdfModalOpen && pdfBlobUrl && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+          onClick={(e) => { if (e.target === e.currentTarget) setPdfModalOpen(false); }}
+        >
+          <div className="relative w-[90vw] max-w-4xl h-[90vh] bg-background rounded-xl shadow-2xl flex flex-col overflow-hidden">
+            {/* Modal header */}
+            <div className="flex items-center justify-between px-5 py-3 border-b shrink-0 bg-muted/30">
+              <span className="font-semibold text-sm">Preview: {pdfFileName.replace(/_/g, " ")}</span>
+              <div className="flex items-center gap-2">
+                <a
+                  href={pdfBlobUrl}
+                  download={pdfFileName}
+                  className="px-3 py-1.5 rounded-md bg-primary text-primary-foreground hover:bg-primary/90 transition-colors flex items-center gap-1.5 text-sm font-medium mr-2"
+                  title="Download PDF"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  Download
+                </a>
+                <button
+                  onClick={() => setPdfModalOpen(false)}
+                  className="p-1.5 rounded-md hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+                  aria-label="Close PDF preview"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+            {/* PDF iframe — browser's native viewer handles zoom/print/download */}
+            <iframe
+              src={pdfBlobUrl}
+              className="flex-1 w-full border-0"
+              title="Resume PDF Preview"
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
