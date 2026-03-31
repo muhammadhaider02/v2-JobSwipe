@@ -1,0 +1,11 @@
+Dear Hiring Manager,
+
+I'm applying for the [JOB_TITLE] role at [COMPANY]. I work in [SKILL_1] and [SKILL_2] and on [PROJECT] I focused specifically on [JOB_REQUIREMENT].
+
+I write clean, documented code and take ownership of what I ship. That's been consistent across every role I've worked in.
+
+Resume attached. Happy to connect at your convenience.
+
+[FULL_NAME]
+[LINKEDIN]
+[PHONE]

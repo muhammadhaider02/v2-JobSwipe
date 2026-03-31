@@ -63,7 +63,7 @@ logs/
 *.sqlite3
 
 # Uploads and user content
-uploads/
+#uploads/
 temp/
 tmp/
 

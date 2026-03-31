@@ -5,6 +5,7 @@ API endpoints for application material preparation and submission automation.
 
 from flask import Blueprint, request, jsonify
 from flask_cors import cross_origin
+import json
 import logging
 import uuid
 from datetime import datetime
@@ -28,13 +29,21 @@ def _is_valid_uuid(val):
 
 
 def _get_latest_application_for_job(supabase, user_id: str, job_id: str) -> Optional[Dict[str, Any]]:
-    """Fetch the latest application record for a user and job pair."""
-    applications = supabase.get_user_applications(user_id=user_id, limit=100)
-    matches = [app for app in applications if app.get("job_id") == job_id]
-    if not matches:
+    """Fetch the latest application record for a user and job pair via direct query."""
+    try:
+        response = (
+            supabase.client.table("job_applications")
+            .select("*")
+            .eq("user_id", user_id)
+            .eq("job_id", job_id)
+            .order("created_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+        return response.data[0] if response.data else None
+    except Exception as e:
+        logger.warning(f"Could not fetch application for user={user_id} job={job_id}: {e}")
         return None
-    matches.sort(key=lambda app: app.get("created_at", ""), reverse=True)
-    return matches[0]
 
 
 def _resolve_application_id(
@@ -153,6 +162,9 @@ def prepare_application_materials():
             sections_to_optimize=sections_to_optimize
         )
         
+        # Reconnect to Supabase after the long LLM operation to avoid stale HTTP/2 connection
+        supabase.reconnect()
+
         # Check for errors
         if result.get("error"):
             logger.error(f"Material preparation failed: {result['error']}")
@@ -468,6 +480,68 @@ def submit_application(job_id: str):
             "status": "error",
             "error": str(e)
         }), 500
+
+
+@campaign_bp.route('/application-materials/<job_id>', methods=['GET', 'OPTIONS'])
+@cross_origin(origins="http://localhost:3000")
+def get_application_materials(job_id: str):
+    """
+    Fetch existing saved application materials (resume + cover letter) for a job.
+
+    Returns immediately from the database — no LLM call is made.
+    The frontend uses this to skip re-generation on refresh/revisits.
+
+    Query params:
+        user_id (str): Required. The user's UUID.
+
+    Response:
+    {
+        "has_materials": true,
+        "application_id": 42,
+        "optimized_resume": {...},   # parsed JSON or null
+        "cover_letter": "...",       # text or null
+    }
+    """
+    if request.method == 'OPTIONS':
+        return '', 204
+
+    try:
+        user_id = request.args.get("user_id")
+        if not user_id:
+            return jsonify({"error": "user_id query parameter is required"}), 400
+
+        if not _is_valid_uuid(user_id):
+            return jsonify({"error": "Invalid user_id format"}), 400
+
+        supabase = get_supabase_service()
+        latest = _get_latest_application_for_job(supabase, user_id=user_id, job_id=job_id)
+
+        if not latest:
+            return jsonify({"has_materials": False}), 200
+
+        # optimized_resume_url stores the resume as a JSON string (set by save-draft)
+        raw_resume = latest.get("optimized_resume_url")
+        optimized_resume = None
+        if raw_resume:
+            try:
+                optimized_resume = json.loads(raw_resume)
+            except (ValueError, TypeError):
+                # Stored as a plain URL string rather than JSON — treat as no resume
+                optimized_resume = None
+
+        cover_letter = latest.get("optimized_cover_letter") or None
+        has_materials = optimized_resume is not None or cover_letter is not None
+
+        return jsonify({
+            "has_materials": has_materials,
+            "application_id": latest.get("id"),
+            "optimized_resume": optimized_resume,
+            "cover_letter": cover_letter,
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Error in get_application_materials: {str(e)}")
+        return jsonify({"success": False, "error": str(e)}), 500
 
 
 @campaign_bp.route('/application-status/<job_id>', methods=['GET', 'OPTIONS'])

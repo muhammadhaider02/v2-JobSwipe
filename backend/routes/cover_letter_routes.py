@@ -35,10 +35,18 @@ def list_cover_letter_templates():
         ]
     )
 
+    FRIENDLY_NAMES = {
+        "template1.txt": "Professional",
+        "template2.txt": "Early Career",
+        "template3.txt": "Portfolio-Led",
+        "template4.txt": "No Nonsense",
+        "template5.txt": "Straight to It"
+    }
+
     templates = [
         {
             "name": name,
-            "display_name": name.replace("_", " ").replace(".txt", "").title(),
+            "display_name": FRIENDLY_NAMES.get(name, name.replace("_", " ").replace(".txt", "").title()),
         }
         for name in template_names
     ]

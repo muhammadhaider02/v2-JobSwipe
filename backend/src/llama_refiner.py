@@ -1,7 +1,9 @@
 import json
+import math
 import os
 import re
 import time
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 
@@ -11,7 +13,8 @@ SCHEMA: Dict[str, Any] = {
     ],
     "experience": [
         {"role": "", "company": "", "duration": "", "location": "", "description": ""}
-    ]
+    ],
+    "years_of_experience": 0
 }
 
 
@@ -31,13 +34,23 @@ SYSTEM_PROMPT = (
     "     ...and so on.\n"
     "  E. Check: does any (date, location) unit appear more than once in your list? If yes, you have a mapping error. Fix it before proceeding.\n\n"
 
+    "STEP 2 — CALCULATE years_of_experience:\n"
+    "After extracting all experience entries, compute the total years of professional work experience:\n"
+    "  A. For each experience entry, determine its start and end date from the duration field.\n"
+    "  B. Treat 'Present', 'Current', 'Now', or 'ongoing' as today's date.\n"
+    "  C. Calculate the duration of each role in months. Sum all durations.\n"
+    "  D. DO NOT double-count overlapping date ranges — if two roles overlap, count the overlapping months only once.\n"
+    "  E. Convert total months to years using ceiling division (e.g. 18 months = 2 years, 12 months = 1 year, 6 months = 1 year).\n"
+    "  F. Set years_of_experience to this integer. If no valid dates are found, set it to 2.\n\n"
+
     "HARD RULES:\n"
     "1. DATE AND LOCATION ARE A UNIT: Never assign a date from one (date, location) pair with the location from a different pair. They travel together.\n"
     "2. ONE ENTRY PER JOB: Same company appearing twice in output is always wrong.\n"
     "3. NO DATE COPYING: Same date range assigned to two different jobs is always wrong.\n"
     "4. NO GHOST ENTRIES: No experience entry without a matching job title.\n"
     "5. NO FABRICATION: Missing fields get an empty string.\n"
-    "6. OUTPUT FORMAT: Valid JSON only. No markdown, no commentary.\n\n"
+    "6. years_of_experience MUST be a non-negative integer (0, 1, 2 …), never a year like 2025.\n"
+    "7. OUTPUT FORMAT: Valid JSON only. No markdown, no commentary.\n\n"
 
     "Schema:\n"
     + json.dumps(SCHEMA, indent=2)
@@ -187,6 +200,127 @@ def _extract_json(text: str) -> Any:
     return json.loads(raw)
 
 
+# ---------------------------------------------------------------------------
+# Deterministic fallback: compute total years of experience from duration
+# strings extracted by the LLM (e.g. "Sep 2025 - Feb 2026", "2020 - Present").
+#
+# Algorithm:
+#   1. Parse each duration string into a (start, end) interval in (year, month).
+#   2. Merge overlapping intervals so concurrent roles are not double-counted.
+#   3. Sum total months across merged intervals and convert to whole years.
+# ---------------------------------------------------------------------------
+
+_MONTH_ABBR = {
+    "jan": 1, "feb": 2, "mar": 3, "apr": 4, "may": 5, "jun": 6,
+    "jul": 7, "aug": 8, "sep": 9, "oct": 10, "nov": 11, "dec": 12,
+    "january": 1, "february": 2, "march": 3, "april": 4,
+    "june": 6, "july": 7, "august": 8, "september": 9,
+    "october": 10, "november": 11, "december": 12,
+}
+
+
+def _parse_date_token(token: str) -> Optional[tuple]:
+    """
+    Parse a date token like 'Sep 2025', '2025', 'Present', 'Current', 'Now'.
+    Returns (year, month) as integers, or None if unparseable.
+    Month defaults to 1 (January) when only a year is given.
+    """
+    token = token.strip().lower()
+    if not token:
+        return None
+
+    # "Present" / "current" / "now" / "ongoing" → today
+    if token in {"present", "current", "now", "ongoing", "date", "till date"}:
+        today = datetime.today()
+        return (today.year, today.month)
+
+    # Try "Month YYYY" or "Month, YYYY"
+    m = re.match(r"([a-z]+)[,.\s]+(\d{4})", token)
+    if m:
+        month_name, year = m.group(1), int(m.group(2))
+        month = _MONTH_ABBR.get(month_name)
+        if month and 1900 < year < 2100:
+            return (year, month)
+
+    # Try bare 4-digit year
+    m = re.match(r"(\d{4})$", token.strip())
+    if m:
+        year = int(m.group(1))
+        if 1900 < year < 2100:
+            return (year, 1)
+
+    return None
+
+
+def _parse_duration_to_interval(duration: str) -> Optional[tuple]:
+    """
+    Parse a duration string like "Sep 2025 - Feb 2026" or "2018 - Present"
+    into ((start_year, start_month), (end_year, end_month)).
+    Returns None if the duration cannot be parsed into a valid interval.
+    """
+    if not duration or not duration.strip():
+        return None
+
+    # Split on common separators: " - ", " – ", " to ", " \u2013 "
+    parts = re.split(r"\s*[-\u2013\u2014]\s*|\s+to\s+", duration.strip(), maxsplit=1)
+
+    if len(parts) == 2:
+        start = _parse_date_token(parts[0])
+        end = _parse_date_token(parts[1])
+    elif len(parts) == 1:
+        # Single token (e.g. a bare year) — treat as a one-year stint starting Jan
+        start = _parse_date_token(parts[0])
+        end = start
+    else:
+        return None
+
+    if start is None or end is None:
+        return None
+
+    # Convert to flat month index for easy comparison
+    start_m = start[0] * 12 + start[1]
+    end_m = end[0] * 12 + end[1]
+
+    if end_m < start_m:
+        # Swap if dates are reversed (defensive)
+        start_m, end_m = end_m, start_m
+
+    return (start_m, end_m)
+
+
+def _calculate_years_from_durations(experience_list: List[Dict[str, Any]]) -> int:
+    """
+    Given the normalized list of experience entries (each with a 'duration'
+    string), calculate total *non-overlapping* months of professional
+    experience and return the integer number of whole years.
+    """
+    intervals: List[tuple] = []
+    for entry in experience_list:
+        duration = entry.get("duration", "") or ""
+        interval = _parse_duration_to_interval(duration)
+        if interval is not None:
+            intervals.append(interval)
+
+    if not intervals:
+        return 0
+
+    # Sort by start month index
+    intervals.sort(key=lambda iv: iv[0])
+
+    # Merge overlapping / adjacent intervals
+    merged: List[tuple] = [intervals[0]]
+    for start, end in intervals[1:]:
+        prev_start, prev_end = merged[-1]
+        if start <= prev_end + 1:
+            # Overlapping or adjacent — extend the last merged interval
+            merged[-1] = (prev_start, max(prev_end, end))
+        else:
+            merged.append((start, end))
+
+    total_months = sum(end - start for start, end in merged)
+    return int(math.ceil(total_months / 12))
+
+
 class LlamaRefiner:
     def __init__(
         self,
@@ -273,6 +407,22 @@ class LlamaRefiner:
             e for e in edu_list
             if (e.get("institution", "").strip() or e.get("degree", "").strip())
         ]
+
+        # Validate years_of_experience: the LLM must return a reasonable integer
+        # (0–50). If it returned something implausible (e.g. a calendar year like
+        # 2025, a negative number, or null) fall back to our deterministic
+        # Python calculator which parses the duration strings directly.
+        llm_years = normalized.get("years_of_experience", 0)
+        valid_llm_years = (
+            isinstance(llm_years, (int, float))
+            and 0 <= int(llm_years) <= 50
+        )
+        if valid_llm_years:
+            normalized["years_of_experience"] = int(llm_years)
+        else:
+            normalized["years_of_experience"] = _calculate_years_from_durations(
+                normalized["experience"]
+            )
 
         return normalized
 

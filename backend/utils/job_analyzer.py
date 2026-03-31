@@ -194,9 +194,9 @@ class JobAnalyzer:
         for pattern in req_patterns:
             matches = re.findall(pattern, description, re.IGNORECASE | re.DOTALL)
             for match in matches:
-                # Split by bullets or newlines
-                items = re.split(r'[\n•\*\-]\s*', match)
-                items = [item.strip() for item in items if item.strip()]
+                # Split by bullets or newlines (avoid splitting hyphenated words)
+                items = re.split(r'\n+|(?:\s+[•\*\-]\s+)', match)
+                items = [item.strip(" -*•\t\n") for item in items if item.strip(" -*•\t\n")]
                 requirements.extend(items[:5])  # Take first 5 from this section
         
         # Deduplicate while preserving order
@@ -221,9 +221,9 @@ class JobAnalyzer:
         for pattern in resp_patterns:
             matches = re.findall(pattern, description, re.IGNORECASE | re.DOTALL)
             for match in matches:
-                # Split by bullets or newlines
-                items = re.split(r'[\n•\*\-]\s*', match)
-                items = [item.strip() for item in items if item.strip()]
+                # Split by bullets or newlines (avoid splitting hyphenated words)
+                items = re.split(r'\n+|(?:\s+[•\*\-]\s+)', match)
+                items = [item.strip(" -*•\t\n") for item in items if item.strip(" -*•\t\n")]
                 responsibilities.extend(items[:5])
         
         # Deduplicate

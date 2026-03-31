@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { Briefcase, Sparkles, ArrowLeft, Loader2, BookOpen, Check } from "lucide-react";
+import { Briefcase, Sparkles, ArrowLeft, Loader2, BookOpen, Check, Clock, Search } from "lucide-react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 
@@ -17,7 +17,7 @@ type Recommendation = {
   };
 };
 
-export default function RecommendationsPage() {
+function RecommendationsContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
@@ -291,10 +291,10 @@ export default function RecommendationsPage() {
           <ArrowLeft className="w-4 h-4" /> Back
         </Link>
       </div>
-      <div className="flex-1 w-full pb-12 pt-0 px-4">
+      <div className="flex-1 w-full pb-8 pt-0 px-4">
         <div className="max-w-6xl mx-auto mt-0 lg:mt-2">
           {/* Header */}
-          <div className="mb-8">
+          <div className="mb-5">
             <div className="flex items-center gap-3 mb-2">
               <Sparkles className="w-8 h-8 text-primary" />
               <h1 className="text-4xl font-bold">Recommended Roles</h1>
@@ -305,16 +305,25 @@ export default function RecommendationsPage() {
           </div>
 
           {/* User Skills Display */}
-          <div className="mb-8 p-4 bg-card border rounded-lg">
+          <div className="mb-5 p-4 bg-card border rounded-lg">
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-base font-semibold text-foreground">Your Skills</h2>
-              <button
-                onClick={handleBrowseJobs}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground text-sm rounded-lg font-medium transition-all shadow-sm hover:shadow-md"
-              >
-                <Briefcase className="w-4 h-4" />
-                View Matching Jobs
-              </button>
+              <div className="flex items-center gap-2">
+                <Link
+                  href="/jobs-applied"
+                  className="inline-flex items-center gap-2 px-4 py-1.5 bg-primary hover:bg-primary/90 text-primary-foreground text-sm rounded-lg font-medium transition-all shadow-sm hover:shadow-md"
+                >
+                  <Clock className="w-4 h-4" />
+                  Jobs Applied
+                </Link>
+                <button
+                  onClick={handleBrowseJobs}
+                  className="inline-flex items-center gap-2 px-4 py-1.5 bg-primary hover:bg-primary/90 text-primary-foreground text-sm rounded-lg font-medium transition-all shadow-sm hover:shadow-md"
+                >
+                  <Search className="w-4 h-4" />
+                  View Matching Jobs
+                </button>
+              </div>
             </div>
             <div className="flex flex-wrap gap-2">
               {userSkills.map((skill, idx) => (
@@ -333,7 +342,7 @@ export default function RecommendationsPage() {
               <p className="text-muted-foreground">Try adding more skills or check back later</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-4">
               {recommendations.map((rec, idx) => (
                 <RoleCard
                   key={idx}
@@ -350,6 +359,23 @@ export default function RecommendationsPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function RecommendationsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex-1 flex items-center justify-center">
+          <div className="text-center">
+            <Loader2 className="w-12 h-12 animate-spin mx-auto mb-4 text-primary" />
+            <p className="text-lg text-muted-foreground">Loading recommendations...</p>
+          </div>
+        </div>
+      }
+    >
+      <RecommendationsContent />
+    </Suspense>
   );
 }
 

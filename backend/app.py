@@ -442,6 +442,12 @@ def upload_resume():
     if ext == ".pdf":
         urls = extract_links_from_pdf(path)
 
+    # Delete the uploaded file now that text and links have been extracted
+    try:
+        os.remove(path)
+    except Exception as e:
+        print(f"Warning: Failed to delete temporary upload file '{path}': {e}")
+
     # Step 2: Extract contact information + links
     contact_info = extract_contact_info(text, urls=urls)
 

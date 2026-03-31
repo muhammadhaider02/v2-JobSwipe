@@ -1,0 +1,11 @@
+Dear Hiring Manager,
+
+I came across the [JOB_TITLE] role at [COMPANY] and wanted to reach out directly. I work in [SKILL_1] and [SKILL_2] and have spent the last while building things that actually ship, including [PROJECT], where I worked on [JOB_REQUIREMENT].
+
+I take the reliability side of the work seriously. Deadlines, clean handoffs, code that the next person can read. That part matters as much to me as the technical side.
+
+Resume attached. Happy to connect at your convenience.
+
+[FULL_NAME]
+[LINKEDIN]
+[PHONE]

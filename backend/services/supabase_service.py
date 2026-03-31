@@ -32,6 +32,19 @@ class SupabaseService:
         except Exception as e:
             print(f"❌ Supabase connection failed: {e}")
             raise
+
+    def reconnect(self) -> None:
+        """Force a fresh Supabase connection. Call after long-running operations
+        (e.g. LLM calls) to avoid stale HTTP/2 connection errors."""
+        print("🔄 Reconnecting Supabase client...")
+        # Explicitly close the old httpx session so the stale HTTP/2 transport
+        # is torn down before we create a fresh client.
+        try:
+            if self.client and hasattr(self.client, 'postgrest') and hasattr(self.client.postgrest, 'session'):
+                self.client.postgrest.session.close()
+        except Exception:
+            pass  # Best-effort close — don't let cleanup errors block reconnect
+        self._connect()
     
     # ==================== User Profile Operations ====================
     

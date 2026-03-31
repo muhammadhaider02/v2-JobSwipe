@@ -1,0 +1,11 @@
+Dear Hiring Manager,
+
+[JOB_TITLE] at [COMPANY]. I work in [SKILL_1] and [SKILL_2]. On [PROJECT], I worked on [JOB_REQUIREMENT].
+
+That's the short version. Resume has the rest.
+
+Happy to connect at your convenience.
+
+[FULL_NAME]
+[LINKEDIN]
+[PHONE]

@@ -293,23 +293,50 @@ ORIGINAL JOB DESCRIPTION:
             Simple cover letter string
         """
         name = user_profile.get("name", "Applicant")
-        email = user_profile.get("email", "")
         phone = user_profile.get("phone", "")
-        company = job_analysis["company_name"]
-        title = job_analysis["job_title"]
-        skills = job_analysis["critical_skills"][:3]
-        
+        linkedin = user_profile.get("linkedin", "")
+        company = job_analysis.get("company_name", "Unknown Company")
+        title = job_analysis.get("job_title", "")
+
+        SOFT_SKILLS = {
+            "integrity", "reliability", "communication", "teamwork", "collaboration",
+            "leadership", "problem solving", "problem-solving", "critical thinking",
+            "time management", "adaptability", "creativity", "flexibility",
+            "attention to detail", "work ethic", "professionalism", "responsibility",
+            "accountability", "self-motivated", "self-driven", "motivated",
+            "cross-functional collaboration", "product management", "compliance",
+            "security testing", "api management", "version control",
+        }
+
+        # Project extraction
+        projects = user_profile.get("projects", [])
+        project_name = "several key initiatives"
+        if isinstance(projects, list) and projects:
+            first_proj = projects[0]
+            if isinstance(first_proj, dict):
+                project_name = first_proj.get("name", project_name)
+            else:
+                project_name = str(first_proj)
+
+        # Technical skills
+        all_skills = job_analysis.get("critical_skills", [])
+        tech_skills = [s for s in all_skills if s.strip().lower() not in SOFT_SKILLS]
+        skill_1 = tech_skills[0] if len(tech_skills) > 0 else "software development"
+        skill_2 = tech_skills[1] if len(tech_skills) > 1 else "cloud architecture"
+
+        # Reuse the clean responsibility extraction from the service
+        job_req = self.cover_letter_service._extract_job_requirement(job_data)
+
         cover_letter = f"""Dear Hiring Manager,
 
-I am writing to express my strong interest in the {title} position at {company}. With expertise in {', '.join(skills)}, I am confident that my skills and experience make me an excellent fit for this role.
+I came across the {title} role at {company} and wanted to reach out directly. I work in {skill_1} and {skill_2} and have spent the last while building things that actually ship, including {project_name}, where I worked on {job_req}.
 
-I am excited about the opportunity to contribute to {company}'s team and would welcome the chance to discuss how my background aligns with your needs.
+I take the reliability side of the work seriously. Deadlines, clean handoffs, code that the next person can read. That part matters as much to me as the technical side.
 
-Thank you for considering my application.
+Resume attached. Happy to connect at your convenience.
 
-Best regards,
 {name}
-{email}
+{linkedin}
 {phone}
 """
         return cover_letter.strip()

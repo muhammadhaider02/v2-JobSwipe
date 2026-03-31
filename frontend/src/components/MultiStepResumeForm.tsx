@@ -50,6 +50,8 @@ type FormState = {
   projects: Project[];
   skills: string[];
   certificates: Certificate;
+  /** Calculated total years of professional experience (from LLM or fallback). */
+  yearsOfExperience: number;
 };
 
 const steps = [
@@ -118,6 +120,7 @@ export default function MultiStepResumeForm({ userId }: MultiStepResumeFormProps
       issueDate: "",
       expiryDate: "",
     },
+    yearsOfExperience: 0,
   });
 
   const progress = useMemo(
@@ -227,12 +230,13 @@ export default function MultiStepResumeForm({ userId }: MultiStepResumeFormProps
     if (Object.keys(v).length === 0) {
       try {
         setIsSavingProfile(true);
-        
-        // Calculate years of experience from experience array
-        const yearsOfExperience = form.experience.reduce((total, exp) => {
-          const durationMatch = exp.duration.match(/(\d+)/);
-          return total + (durationMatch ? parseInt(durationMatch[1]) : 0);
-        }, 0);
+
+        // Prepare profile data for backend — use the yearsOfExperience value
+        // stored in form state, which was set by the LLM during autofill
+        // (or by the Python fallback if the LLM returned an implausible value).
+        // This avoids the broken regex that previously grabbed bare calendar
+        // years like "2025" from duration strings.
+        const yearsOfExperience = form.yearsOfExperience;
 
         // Prepare profile data for backend
         const profileData = {
@@ -409,6 +413,9 @@ export default function MultiStepResumeForm({ userId }: MultiStepResumeFormProps
                     expiryDate: profile.certificates[0].expiry_date || "",
                   }
                 : { name: "", issuer: "", issueDate: "", expiryDate: "" },
+              // Restore the previously-saved years of experience from the DB.
+              // Clamp to [0, 50] as a safety guard against corrupt data.
+              yearsOfExperience: Math.min(50, Math.max(0, typeof profile.years_of_experience === "number" ? profile.years_of_experience : 0)),
             });
             
             console.log("Profile loaded successfully");
@@ -977,6 +984,8 @@ type BackendJson = {
     link?: string;
   }>;
   skills?: string[];
+  /** Total non-overlapping years of professional experience, set by the LLM. */
+  years_of_experience?: number;
 };
 
 function applyAutofill(prev: FormState, data: BackendJson): FormState {
@@ -1086,6 +1095,18 @@ function applyAutofill(prev: FormState, data: BackendJson): FormState {
   // Skills: REPLACE entirely with what came from the resume (never merge with stale data)
   if (data.skills && data.skills.length) {
     next.skills = [...data.skills];
+  }
+
+  // years_of_experience: only accept a plausible non-negative integer (0–50).
+  // The LLM (with Python fallback) guarantees this range, but we guard here
+  // too so that a stale or malformed partial poll response cannot corrupt it.
+  if (
+    typeof data.years_of_experience === "number" &&
+    Number.isInteger(data.years_of_experience) &&
+    data.years_of_experience >= 0 &&
+    data.years_of_experience <= 50
+  ) {
+    next.yearsOfExperience = data.years_of_experience;
   }
 
   return next;
