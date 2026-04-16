@@ -81,6 +81,7 @@ export default function JobApplicationMaterialsPage() {
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
   const savedFadeRef = useRef<NodeJS.Timeout | null>(null);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
+  const [applyLoading, setApplyLoading] = useState(false);
 
   const [regenResumeLoading, setRegenResumeLoading] = useState(false);
 
@@ -356,6 +357,71 @@ export default function JobApplicationMaterialsPage() {
     }
   }
 
+  async function handleApply() {
+    setApplyLoading(true);
+    setError(null);
+    try {
+      let parsedResume: any;
+      try {
+        parsedResume = JSON.parse(resumeJsonText);
+      } catch {
+        setError("The resume JSON is not valid. Please fix any syntax errors before applying.");
+        return;
+      }
+
+      if (!parsedResume || Object.keys(parsedResume).length === 0) {
+        setError("Resume has not been generated yet — the job could not be found in the database. Please ensure the job is scraped and saved before applying.");
+        return;
+      }
+
+      const toPascalCase = (s: string) =>
+        s.toLowerCase().split(/[\s_\-]+/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join('');
+
+      let userName = "User";
+      const pInfo = parsedResume.personal_info || parsedResume.contact || parsedResume.personal_information || {};
+      if (pInfo.name) {
+        userName = toPascalCase(pInfo.name.trim());
+      }
+      const companyName = job?.company ? toPascalCase(job.company.trim()) : "Company";
+      const fileName = `${companyName}-${userName}-Resume.pdf`;
+
+      const res = await fetch(`${BACKEND_BASE}/generate-resume-pdf`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ resume_json: parsedResume }),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData?.error || `Server returned ${res.status}`);
+      }
+
+      const blob = await res.blob();
+
+      // Trigger download
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      // Open the job listing URL in a new tab
+      const jobUrl = job?.url;
+      if (jobUrl) {
+        window.open(jobUrl, "_blank");
+      } else {
+        window.open("about:blank", "_blank");
+      }
+    } catch (e: any) {
+      setError(e?.message || "Failed to generate PDF for apply.");
+    } finally {
+      setApplyLoading(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex-1 w-full bg-gradient-to-br from-background to-muted/20 flex flex-col relative items-center justify-center min-h-[50vh]">
@@ -495,17 +561,19 @@ export default function JobApplicationMaterialsPage() {
 
           <div className="flex justify-end gap-3 w-full pb-0 -mt-2">
             <button
-              onClick={() => { }}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground text-sm rounded-lg font-medium transition-all shadow-sm hover:shadow-md"
+              onClick={handleApply}
+              disabled={applyLoading}
+              className="inline-flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground text-sm rounded-lg font-medium transition-all shadow-sm hover:shadow-md disabled:opacity-50"
             >
-              Self Apply
+              {applyLoading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+              Apply
             </button>
-            <button
+            {/* <button
               onClick={() => { }}
               className="inline-flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground text-sm rounded-lg font-medium transition-all shadow-sm hover:shadow-md"
             >
               Auto Apply
-            </button>
+            </button> */}
           </div>
         </div>
       </div>

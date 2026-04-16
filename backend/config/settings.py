@@ -35,7 +35,7 @@ class Settings(BaseSettings):
     # SambaNova LLM Configuration
     sambanova_api_key: str = Field(default="", description="SambaNova API key")
     sambanova_base_url: str = Field(default="https://api.sambanova.ai/v1", description="SambaNova API base URL")
-    sambanova_model: str = Field(default="Meta-Llama-3.1-8B-Instruct", description="LLM model name")
+    sambanova_model: str = Field(default="gemma-3-12b-it", description="LLM model name")
     
     # Rate Limiting
     rate_limit_calls_per_minute: int = Field(default=15, description="Max LLM calls per minute")

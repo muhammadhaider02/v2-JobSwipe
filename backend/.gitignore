@@ -1,5 +1,7 @@
 # Environment variables
 .env
+.env.*
+*.env
 .env.local
 .env.development
 .env.test
@@ -119,3 +121,11 @@ dmypy.json
 *.md 
 
 sentence_transformers/
+
+# ML model artifacts (from global .gitignore)
+*.index
+*.pkl
+
+# Screenshots and agent temp files (from global .gitignore)
+screenshots/
+agent_data/

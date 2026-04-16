@@ -79,21 +79,24 @@ function RecommendationsContent() {
         setUserSkills(skills);
 
         // Check if we have cached recommendations.
-        // Use the cache if:
-        //   1. There is NO skills param (navigated back without URL), OR
-        //   2. There IS a skills param but it matches the skills we already computed for
-        //      (e.g. browser back button keeps the URL intact — same skills, no need to re-fetch)
-        // Only skip the cache (and re-fetch) when skills have genuinely changed.
+        // Use the cache ONLY if:
+        //   1. The skills haven't changed since the last fetch, AND
+        //   2. We have a valid cache
+        // A new resume upload will set a 'resumeChanged' flag to force re-fetch.
         const cachedRecommendations = sessionStorage.getItem('recommendations');
-        const cachedSkills = sessionStorage.getItem('userSkills');
+        const cachedSkills = sessionStorage.getItem('cachedRecommendationSkills');
         const skillsUnchanged = cachedSkills === JSON.stringify(skills);
+        const resumeChanged = sessionStorage.getItem('resumeChanged');
 
-        if (cachedRecommendations && (!skillsParam || skillsUnchanged)) {
-          // Serve from cache — skills haven't changed
+        if (cachedRecommendations && skillsUnchanged && !resumeChanged) {
+          // Serve from cache — skills haven't changed and no new resume
           setRecommendations(JSON.parse(cachedRecommendations));
           setLoading(false);
           return;
         }
+
+        // Clear the flag so subsequent visits use cache normally
+        sessionStorage.removeItem('resumeChanged');
 
         // Skills have changed (or no cache) — persist new skills and re-fetch
         sessionStorage.setItem('userSkills', JSON.stringify(skills));
@@ -163,8 +166,9 @@ function RecommendationsContent() {
           );
 
           setRecommendations(recommendationsWithGapData);
-          // Cache recommendations in sessionStorage
+          // Cache recommendations and the skills they were computed for
           sessionStorage.setItem('recommendations', JSON.stringify(recommendationsWithGapData));
+          sessionStorage.setItem('cachedRecommendationSkills', JSON.stringify(skills));
         } catch (fetchError: any) {
           clearTimeout(timeoutId);
           if (fetchError.name === 'AbortError') {
@@ -309,13 +313,13 @@ function RecommendationsContent() {
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-base font-semibold text-foreground">Your Skills</h2>
               <div className="flex items-center gap-2">
-                <Link
+                {/* <Link
                   href="/jobs-applied"
                   className="inline-flex items-center gap-2 px-4 py-1.5 bg-primary hover:bg-primary/90 text-primary-foreground text-sm rounded-lg font-medium transition-all shadow-sm hover:shadow-md"
                 >
                   <Clock className="w-4 h-4" />
                   Jobs Applied
-                </Link>
+                </Link> */}
                 <button
                   onClick={handleBrowseJobs}
                   className="inline-flex items-center gap-2 px-4 py-1.5 bg-primary hover:bg-primary/90 text-primary-foreground text-sm rounded-lg font-medium transition-all shadow-sm hover:shadow-md"

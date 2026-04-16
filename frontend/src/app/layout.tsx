@@ -44,7 +44,7 @@ export default function RootLayout({
                 <nav className="w-full flex border-b border-b-foreground/10 h-16 bg-background">
                   <div className="w-full flex justify-between items-center p-3 px-6 text-sm">
                     <div className="flex gap-5 items-center font-semibold text-lg hover:text-primary transition-colors">
-                      <Link href="/">JobSwipe</Link>
+                      <Link href="/onboarding">JobSwipe</Link>
                     </div>
                     <AuthButton />
                   </div>

@@ -17,6 +17,7 @@ from src.updated_query import suggest_roles as get_role_recommendations
 from src.skill_gap_analysis import analyze_skill_gap
 from src.skill_enrichment import enrich_skills
 from services.supabase_service import SupabaseService
+from config.settings import get_settings
 
 # Import blueprints
 from routes.campaign_routes import campaign_bp
@@ -572,8 +573,8 @@ def upload_resume():
             )
 
             backend = os.getenv("LLAMA_BACKEND", "openai_compat")
-            model_name = os.getenv("LLAMA_MODEL", "Meta-Llama-3.1-8B-Instruct")
-            base_url = os.getenv("LLAMA_BASE_URL", "https://api.sambanova.ai/v1")
+            model_name = get_settings().sambanova_model
+            base_url = get_settings().sambanova_base_url
 
             print("\n==== LLM CONFIG ====", flush=True)
             print(f"backend={backend}", flush=True)
@@ -622,8 +623,8 @@ def upload_resume():
             )
             projects_text = sections.get("Projects", "")
             backend = os.getenv("LLAMA_BACKEND", "openai_compat")
-            model_name = os.getenv("LLAMA_MODEL", "Meta-Llama-3.1-8B-Instruct")
-            base_url = os.getenv("LLAMA_BASE_URL", "https://api.sambanova.ai/v1")
+            model_name = get_settings().sambanova_model
+            base_url = get_settings().sambanova_base_url
 
             extracted_projects = refine_projects(
                 projects_text=projects_text,

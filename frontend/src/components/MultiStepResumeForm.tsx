@@ -301,6 +301,10 @@ export default function MultiStepResumeForm({ userId }: MultiStepResumeFormProps
         // Store skills in sessionStorage so recommendations page picks them up
         // This keeps the URL clean (/recommendations instead of /recommendations?skills=...)
         sessionStorage.setItem('userSkills', JSON.stringify(form.skills));
+        // Signal to recommendations page that a new resume was submitted — invalidate cache
+        sessionStorage.setItem('resumeChanged', 'true');
+        sessionStorage.removeItem('recommendations');
+        sessionStorage.removeItem('cachedRecommendationSkills');
         window.location.href = '/recommendations';
       } catch (error) {
         console.error("Error saving profile:", error);
