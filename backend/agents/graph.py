@@ -9,8 +9,6 @@ from langgraph.graph import END, StateGraph
 from agents.nodes import (
     campaign_manager_node,
     check_auth_status_node,
-    digital_scout_node,
-    job_enricher_node,
     vetting_officer_node,
     wait_for_login_node,
 )
@@ -37,7 +35,7 @@ def build_campaign_graph():
     Build workflow with auth gate.
 
     Flow:
-      scout -> enricher -> vetting -> check_auth_status
+      vetting -> check_auth_status
       check_auth_status -> campaign (if authenticated)
       check_auth_status -> wait_for_login (if auth required)
       wait_for_login -> END (paused) OR campaign (on Resume)
@@ -45,16 +43,12 @@ def build_campaign_graph():
     """
     workflow = StateGraph(AgentState)
 
-    workflow.add_node("scout", digital_scout_node)
-    workflow.add_node("enricher", job_enricher_node)
     workflow.add_node("vetting", vetting_officer_node)
     workflow.add_node("check_auth_status", check_auth_status_node)
     workflow.add_node("wait_for_login", wait_for_login_node)
     workflow.add_node("campaign", campaign_manager_node)
 
-    workflow.set_entry_point("scout")
-    workflow.add_edge("scout", "enricher")
-    workflow.add_edge("enricher", "vetting")
+    workflow.set_entry_point("vetting")
     workflow.add_edge("vetting", "check_auth_status")
 
     workflow.add_conditional_edges(

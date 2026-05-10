@@ -370,8 +370,6 @@ class LlamaRefiner:
                 raw = self._call_ollama_native(messages)
             except Exception:
                 raw = self._call_openai_compatible(messages)
-        elif self.backend == "huggingface":
-            raw = self._call_huggingface(messages)
         else:
             raise ValueError(f"Unsupported backend: {self.backend}")
 
@@ -626,42 +624,6 @@ class LlamaRefiner:
         if isinstance(data, dict) and data.get("response") is not None:
             return data["response"]
         raise RuntimeError("Unexpected Ollama /api/generate response format")
-
-    def _call_huggingface(self, messages: List[Dict[str, str]]) -> str:
-        from transformers import AutoModelForCausalLM, AutoTokenizer
-        import torch
-
-        model_id = self.model or "meta-llama/Meta-Llama-3-8B-Instruct"
-        if self._hf_model is None:
-            self._hf_tokenizer = AutoTokenizer.from_pretrained(model_id)
-            self._hf_model = AutoModelForCausalLM.from_pretrained(
-                model_id,
-                torch_dtype=torch.float16 if torch.cuda.is_available() else None,
-                device_map="auto",
-            )
-
-        tokenizer = self._hf_tokenizer
-        model = self._hf_model
-
-        prompt = tokenizer.apply_chat_template(
-            messages,
-            tokenize=False,
-            add_generation_prompt=True,
-        )
-
-        inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
-        with torch.no_grad():
-            outputs = model.generate(
-                **inputs,
-                max_new_tokens=self.max_new_tokens,
-                temperature=self.temperature,
-                do_sample=False,
-            )
-        text = tokenizer.decode(outputs[0], skip_special_tokens=True)
-
-        # Extract only the assistant's last turn if template includes prior text
-        # Try to get JSON body
-        return text.split("</s>")[-1].strip()
 
 
 # Convenience functional API — Education + Experience

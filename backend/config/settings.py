@@ -41,15 +41,6 @@ class Settings(BaseSettings):
     rate_limit_calls_per_minute: int = Field(default=15, description="Max LLM calls per minute")
     rate_limit_cooldown_seconds: float = Field(default=4.0, description="Cooldown between LLM calls")
     
-    # Scrapling Configuration
-    scrapling_cache_dir: str = Field(default="./scrapling_cache", description="Scrapling checkpoint directory")
-    scrapling_max_pages: int = Field(default=3, description="Browser tab pool size for StealthySession")
-    
-    # Job Scraping Configuration
-    job_scraping_concurrent_requests: int = Field(default=5, description="Concurrent HTTP requests")
-    job_scraping_download_delay: float = Field(default=2.0, description="Delay between requests (seconds)")
-    job_scraping_max_results: int = Field(default=50, description="Maximum jobs to scrape per search")
-    
     # Agent Configuration
     agent_db_path: str = Field(default="jobswipe_agent.db", description="SQLite checkpoint database path")
     agent_match_threshold: float = Field(default=0.5, description="Minimum skill match score for vetting")
@@ -72,22 +63,12 @@ class Settings(BaseSettings):
     
     # Existing settings (from original .env.local)
     faiss_index_path: str = Field(default="models/skills_faiss.index", description="FAISS index path")
-    metadata_path: str = Field(default="models/metadata.pkl", description="Metadata pickle path")
-    excel_skill_gap: str = Field(default="models/excel/skill_gap.xlsx", description="Skill gap Excel path")
-    sheet_skill_gap: str = Field(default="Sheet1", description="Skill gap sheet name")
-    embedding_model_name: str = Field(default="sentence-transformers/all-MiniLM-L6-v2", description="Embedding model")
-    sentence_transformers_home: str = Field(default="models/sentence_transformers", description="ST cache dir")
     
     @property
     def backend_dir(self) -> Path:
         """Get backend directory path."""
         return Path(__file__).resolve().parent.parent
-    
-    @property
-    def scrapling_cache_path(self) -> Path:
-        """Get absolute path to Scrapling cache directory."""
-        return self.backend_dir / self.scrapling_cache_dir
-    
+
     @property
     def agent_db_full_path(self) -> Path:
         """Get absolute path to agent database."""
