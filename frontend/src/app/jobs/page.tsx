@@ -332,6 +332,7 @@ export default function JobsPage() {
   const cardsRef = useRef<VettedJob[]>([]);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const animRef = useRef(false);
+  const appliedIdsRef = useRef<Set<string>>(new Set());
 
   // Keep refs in sync with state
   useEffect(() => { indexRef.current = currentIndex; }, [currentIndex]);
@@ -343,8 +344,21 @@ export default function JobsPage() {
     async function loadUser() {
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
-      if (user?.id) setUserId(user.id);
-      else setError("Please log in first.");
+      if (user?.id) {
+        // Fetch applied job IDs before setting userId so the init effect sees them
+        try {
+          const res = await fetch(`${BACKEND_BASE}/user-applications?user_id=${user.id}`);
+          if (res.ok) {
+            const data = await res.json();
+            appliedIdsRef.current = new Set(
+              (data.applications || []).map((a: { job_id: string }) => a.job_id)
+            );
+          }
+        } catch { /* ignore — filtering is best-effort */ }
+        setUserId(user.id);
+      } else {
+        setError("Please log in first.");
+      }
     }
     loadUser();
   }, []);
@@ -370,10 +384,10 @@ export default function JobsPage() {
 
       if (data.jobs?.length) {
         sinceRef.current = data.total;
-        setCards(prev => {
-          const updated = [...prev, ...data.jobs];
-          return updated;
-        });
+        const newJobs = data.jobs.filter((j: VettedJob) => !appliedIdsRef.current.has(j.job_id));
+        if (newJobs.length) {
+          setCards(prev => [...prev, ...newJobs]);
+        }
       }
 
       const newStatus = data.status as PollStatus;
@@ -411,12 +425,13 @@ export default function JobsPage() {
     const restored = restoreSession();
 
     if (restored) {
-      // Came back from /jobs/[id] — restore exactly where we were
-      setCards(restored.cards);
+      // Came back from /jobs/[id] — restore, filtering out any jobs just applied to
+      const filteredCards = restored.cards.filter(c => !appliedIdsRef.current.has(c.job_id));
+      setCards(filteredCards);
       setCurrentIndex(restored.index);
       sinceRef.current = restored.since;
       indexRef.current = restored.index;
-      cardsRef.current = restored.cards;
+      cardsRef.current = filteredCards;
       const st = restored.status;
       setStatus(st);
       statusRef.current = st;

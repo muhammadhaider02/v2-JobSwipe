@@ -415,6 +415,15 @@ export default function JobApplicationMaterialsPage() {
       } else {
         window.open("about:blank", "_blank");
       }
+
+      // Record the application in the database (fire-and-forget)
+      if (userId && jobId) {
+        fetch(`${BACKEND_BASE}/mark-applied`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ user_id: userId, job_id: jobId, application_id: applicationId }),
+        }).catch(() => {});
+      }
     } catch (e: any) {
       setError(e?.message || "Failed to generate PDF for apply.");
     } finally {

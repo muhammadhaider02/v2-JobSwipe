@@ -1,56 +1,57 @@
 "use client";
 
-import React from "react";
-import { ArrowLeft, Clock, Briefcase } from "lucide-react";
+import React, { useEffect, useState } from "react";
+import { ArrowLeft, Clock, Briefcase, Loader2 } from "lucide-react";
 import Link from "next/link";
+import { createClient } from "@/lib/supabase/client";
+
+const BACKEND_BASE = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
 
 type AppliedJob = {
+  job_id: string;
   title: string;
   company: string;
   location: string;
   type: string;
-  dateApplied: string;
+  url: string;
+  applied_at: string | null;
 };
 
-const DUMMY_JOBS: AppliedJob[] = [
-  {
-    title: "Software Engineer I",
-    company: "Company A",
-    location: "Islamabad, Pakistan",
-    type: "Full-time",
-    dateApplied: "Mar 27, 2026",
-  },
-  {
-    title: "Software Engineer II",
-    company: "Company B",
-    location: "Islamabad, Pakistan",
-    type: "Full-time",
-    dateApplied: "Mar 28, 2026",
-  },
-  {
-    title: "Software Engineer III",
-    company: "Company C",
-    location: "Islamabad, Pakistan",
-    type: "Full-time",
-    dateApplied: "Mar 29, 2026",
-  },
-  {
-    title: "Software Engineer IV",
-    company: "Company D",
-    location: "Islamabad, Pakistan",
-    type: "Full-time",
-    dateApplied: "Mar 30, 2026",
-  },
-  {
-    title: "Software Engineer V",
-    company: "Company E",
-    location: "Islamabad, Pakistan",
-    type: "Full-time",
-    dateApplied: "Mar 31, 2026",
-  },
-];
+function formatDate(iso: string | null): string {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
 
 export default function JobsAppliedPage() {
+  const [jobs, setJobs] = useState<AppliedJob[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function fetchApplied() {
+      try {
+        const supabase = createClient();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (!user?.id) return;
+
+        const res = await fetch(
+          `${BACKEND_BASE}/user-applications?user_id=${user.id}`
+        );
+        if (!res.ok) return;
+        const data = await res.json();
+        setJobs(data.applications || []);
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchApplied();
+  }, []);
+
   return (
     <div className="flex-1 w-full bg-gradient-to-br from-background to-muted/20 flex flex-col relative">
       <div className="absolute top-4 left-6 z-10">
@@ -75,44 +76,61 @@ export default function JobsAppliedPage() {
             </p>
           </div>
 
-          {/* Applied Jobs List */}
-          <div className="flex flex-col gap-3 mb-5">
-            {DUMMY_JOBS.map((job, idx) => (
-              <div
-                key={idx}
-                className="bg-card border rounded-xl py-2.5 px-4 shadow-sm hover:shadow-md transition-all flex items-center gap-4 hover:border-primary/50"
-              >
-                {/* Icon */}
-                <div className="p-2.5 bg-primary/10 rounded-lg hidden sm:block flex-shrink-0">
-                  <Briefcase className="w-5 h-5 text-primary" />
-                </div>
+          {loading ? (
+            <div className="flex items-center justify-center py-16">
+              <Loader2 className="w-6 h-6 animate-spin text-primary" />
+            </div>
+          ) : jobs.length === 0 ? (
+            <div className="text-center py-16 text-muted-foreground">
+              No applications yet. Start swiping to find your next role!
+            </div>
+          ) : (
+            <div className="flex flex-col gap-3 mb-5">
+              {jobs.map((job) => (
+                <a
+                  key={job.job_id}
+                  href={job.url || undefined}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`bg-card border rounded-xl py-2.5 px-4 shadow-sm hover:shadow-md transition-all flex items-center gap-4 hover:border-primary/50${job.url ? " cursor-pointer" : " cursor-default"}`}
+                >
+                  <div className="p-2.5 bg-primary/10 rounded-lg hidden sm:block flex-shrink-0">
+                    <Briefcase className="w-5 h-5 text-primary" />
+                  </div>
 
-                {/* Job details */}
-                <div className="flex-grow">
-                  <h3 className="text-lg font-semibold leading-tight">
-                    {job.title}
-                  </h3>
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-0.5 text-sm text-muted-foreground">
-                    <span>{job.company}</span>
-                    <span className="hidden sm:inline text-muted-foreground/40">•</span>
-                    <span>{job.location}</span>
-                    <span className="hidden sm:inline text-muted-foreground/40">•</span>
-                    <span>{job.type}</span>
+                  <div className="flex-grow">
+                    <h3 className="text-lg font-semibold leading-tight">
+                      {job.title}
+                    </h3>
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-0.5 text-sm text-muted-foreground">
+                      <span>{job.company}</span>
+                      {job.location && (
+                        <>
+                          <span className="hidden sm:inline text-muted-foreground/40">•</span>
+                          <span>{job.location}</span>
+                        </>
+                      )}
+                      {job.type && (
+                        <>
+                          <span className="hidden sm:inline text-muted-foreground/40">•</span>
+                          <span>{job.type}</span>
+                        </>
+                      )}
+                    </div>
                   </div>
-                </div>
 
-                {/* Date Applied */}
-                <div className="flex-shrink-0 text-right">
-                  <div className="text-xs text-muted-foreground mb-0.5">
-                    Applied
+                  <div className="flex-shrink-0 text-right">
+                    <div className="text-xs text-muted-foreground mb-0.5">
+                      Applied
+                    </div>
+                    <div className="font-semibold text-sm text-foreground">
+                      {formatDate(job.applied_at)}
+                    </div>
                   </div>
-                  <div className="font-semibold text-sm text-foreground">
-                    {job.dateApplied}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
+                </a>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>

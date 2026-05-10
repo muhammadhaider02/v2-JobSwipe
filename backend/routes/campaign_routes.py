@@ -597,6 +597,114 @@ def get_application_status(job_id: str):
         }), 500
 
 
+@campaign_bp.route('/mark-applied', methods=['POST', 'OPTIONS'])
+@cross_origin(origins="http://localhost:3000")
+def mark_applied():
+    """Mark a job application as applied and record applied_at timestamp."""
+    if request.method == 'OPTIONS':
+        return '', 204
+
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
+
+        user_id = data.get("user_id")
+        job_id = data.get("job_id")
+        application_id = data.get("application_id")
+
+        if not user_id or not job_id:
+            return jsonify({"error": "user_id and job_id are required"}), 400
+
+        if not _is_valid_uuid(user_id):
+            return jsonify({"error": "Invalid user_id format"}), 400
+
+        supabase = get_supabase_service()
+
+        if application_id:
+            app_id = int(application_id)
+        else:
+            existing = _get_latest_application_for_job(supabase, user_id, job_id)
+            if existing:
+                app_id = existing["id"]
+            else:
+                app_id = supabase.create_application(
+                    user_id=user_id,
+                    job_id=job_id,
+                    reasoning_note="Manually applied via apply button",
+                )
+
+        if not app_id:
+            return jsonify({"error": "Failed to resolve application record"}), 500
+
+        supabase.update_application_status(app_id, "applied", applied_at=datetime.utcnow())
+
+        return jsonify({"success": True, "application_id": app_id, "status": "applied"}), 200
+
+    except Exception as e:
+        logger.error(f"Error in mark_applied: {str(e)}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+@campaign_bp.route('/user-applications', methods=['GET', 'OPTIONS'])
+@cross_origin(origins="http://localhost:3000")
+def get_user_applications():
+    """Return jobs the user has applied to (status='applied'), with job details."""
+    if request.method == 'OPTIONS':
+        return '', 204
+
+    try:
+        user_id = request.args.get("user_id")
+        if not user_id:
+            return jsonify({"error": "user_id query parameter is required"}), 400
+
+        if not _is_valid_uuid(user_id):
+            return jsonify({"error": "Invalid user_id format"}), 400
+
+        supabase = get_supabase_service()
+
+        apps_resp = (
+            supabase.client.table("job_applications")
+            .select("id, job_id, applied_at, created_at")
+            .eq("user_id", user_id)
+            .eq("status", "applied")
+            .order("applied_at", desc=True)
+            .execute()
+        )
+        applications = apps_resp.data or []
+
+        if not applications:
+            return jsonify({"success": True, "applications": []}), 200
+
+        job_ids = list({a["job_id"] for a in applications})
+        jobs_resp = (
+            supabase.client.table("jobs")
+            .select("job_id, job_title, company, location, job_type, url")
+            .in_("job_id", job_ids)
+            .execute()
+        )
+        jobs_map = {j["job_id"]: j for j in (jobs_resp.data or [])}
+
+        result = []
+        for app in applications:
+            job = jobs_map.get(app["job_id"], {})
+            result.append({
+                "job_id": app["job_id"],
+                "title": job.get("job_title") or "Unknown Role",
+                "company": job.get("company") or "Unknown Company",
+                "location": job.get("location") or "",
+                "type": job.get("job_type") or "",
+                "url": job.get("url") or "",
+                "applied_at": app.get("applied_at") or app.get("created_at"),
+            })
+
+        return jsonify({"success": True, "applications": result}), 200
+
+    except Exception as e:
+        logger.error(f"Error in get_user_applications: {str(e)}")
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
 @campaign_bp.route('/application-materials/save-draft', methods=['POST', 'OPTIONS'])
 @cross_origin(origins="http://localhost:3000")
 def save_application_materials_draft():

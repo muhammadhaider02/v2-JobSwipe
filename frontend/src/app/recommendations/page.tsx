@@ -313,13 +313,13 @@ function RecommendationsContent() {
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-base font-semibold text-foreground">Your Skills</h2>
               <div className="flex items-center gap-2">
-                {/* <Link
+                <Link
                   href="/jobs-applied"
                   className="inline-flex items-center gap-2 px-4 py-1.5 bg-primary hover:bg-primary/90 text-primary-foreground text-sm rounded-lg font-medium transition-all shadow-sm hover:shadow-md"
                 >
                   <Clock className="w-4 h-4" />
                   Jobs Applied
-                </Link> */}
+                </Link>
                 <button
                   onClick={handleBrowseJobs}
                   className="inline-flex items-center gap-2 px-4 py-1.5 bg-primary hover:bg-primary/90 text-primary-foreground text-sm rounded-lg font-medium transition-all shadow-sm hover:shadow-md"
