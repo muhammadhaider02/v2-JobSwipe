@@ -18,7 +18,7 @@ class HybridQuizService:
     """Hybrid quiz service with taxonomy-driven skill resolution"""
     
     # Path to the quiz database
-    QUIZ_DB_PATH = 'quiz.db'
+    QUIZ_DB_PATH = 'data/quiz.db'
     
     def __init__(self):
         """Initialize hybrid quiz service with taxonomy"""

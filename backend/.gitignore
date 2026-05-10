@@ -59,11 +59,6 @@ Thumbs.db
 *.log
 logs/
 
-# Database
-*.db
-*.sqlite
-*.sqlite3
-
 # Uploads and user content
 #uploads/
 temp/
@@ -122,10 +117,6 @@ dmypy.json
 
 sentence_transformers/
 
-# ML model artifacts (from global .gitignore)
-*.index
-*.pkl
-
 # Screenshots and agent temp files (from global .gitignore)
 screenshots/
-agent_data/
+agent_data/

@@ -13,7 +13,7 @@ from models.learning_resources import LearningResource, Quiz, QuizQuestion, Quiz
 class DatabaseService:
     """Service for managing learning resources and quizzes in SQLite"""
     
-    def __init__(self, db_path: str = "learning_resources.db"):
+    def __init__(self, db_path: str = "data/learning_resources.db"):
         """Initialize database connection"""
         self.db_path = Path(__file__).parent.parent / db_path
         self.init_database()
