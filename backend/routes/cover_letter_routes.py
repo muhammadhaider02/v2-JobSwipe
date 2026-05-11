@@ -10,11 +10,12 @@ import os
 logger = logging.getLogger(__name__)
 
 cover_letter_bp = Blueprint('cover_letter', __name__)
+CORS_ORIGIN = os.environ.get("CORS_ALLOWED_ORIGIN", "http://localhost:3000")
 
 
 @cover_letter_bp.route('/cover-letter-templates', methods=['GET', 'OPTIONS'])
 @cross_origin(
-    origins="http://localhost:3000",
+    origins=CORS_ORIGIN,
     methods=["GET", "OPTIONS"],
     allow_headers=["Content-Type"],
     max_age=86400,
@@ -55,7 +56,7 @@ def list_cover_letter_templates():
 
 @cover_letter_bp.route('/generate-cover-letter', methods=['POST', 'OPTIONS'])
 @cross_origin(
-    origins="http://localhost:3000",
+    origins=CORS_ORIGIN,
     methods=["POST", "OPTIONS"],
     allow_headers=["Content-Type"],
     max_age=86400,

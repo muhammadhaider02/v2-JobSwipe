@@ -2,6 +2,7 @@
 API routes for learning resources.
 Provides endpoints for fetching learning resources for skills.
 """
+import os
 from flask import Blueprint, request, jsonify
 from flask_cors import cross_origin
 from services.learning_resources_service import LearningResourcesService
@@ -9,11 +10,12 @@ from typing import List
 
 learning_resources_bp = Blueprint('learning_resources', __name__)
 service = LearningResourcesService()
+CORS_ORIGIN = os.environ.get("CORS_ALLOWED_ORIGIN", "http://localhost:3000")
 
 
 @learning_resources_bp.route('/learning-resources', methods=['POST', 'OPTIONS'])
 @cross_origin(
-    origins="http://localhost:3000",
+    origins=CORS_ORIGIN,
     methods=["POST", "OPTIONS"],
     allow_headers=["Content-Type"],
     max_age=86400,

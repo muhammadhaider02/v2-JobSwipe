@@ -2,6 +2,7 @@
 API routes for quiz generation and evaluation.
 Provides endpoints for generating skill quizzes and evaluating submissions.
 """
+import os
 from flask import Blueprint, request, jsonify
 from flask_cors import cross_origin
 from services.hybrid_quiz_service import HybridQuizService
@@ -9,6 +10,8 @@ from services.supabase_service import SupabaseService
 from typing import Dict, Any
 from datetime import datetime
 import uuid
+
+CORS_ORIGIN = os.environ.get("CORS_ALLOWED_ORIGIN", "http://localhost:3000")
 
 quiz_bp = Blueprint('quiz', __name__)
 hybrid_service = HybridQuizService()
@@ -20,7 +23,7 @@ active_quizzes: Dict[str, Any] = {}
 
 @quiz_bp.route('/skill-quiz/<skill>', methods=['GET', 'OPTIONS'])
 @cross_origin(
-    origins="http://localhost:3000",
+    origins=CORS_ORIGIN,
     methods=["GET", "OPTIONS"],
     allow_headers=["Content-Type"],
     max_age=86400,
@@ -93,7 +96,7 @@ def generate_skill_quiz(skill: str):
 
 @quiz_bp.route('/quiz-submit', methods=['POST', 'OPTIONS'])
 @cross_origin(
-    origins="http://localhost:3000",
+    origins=CORS_ORIGIN,
     methods=["POST", "OPTIONS"],
     allow_headers=["Content-Type"],
     max_age=86400,

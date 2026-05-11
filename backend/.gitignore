@@ -2,121 +2,44 @@
 .env
 .env.*
 *.env
-.env.local
-.env.development
-.env.test
-.env.production
-.env.staging
 
-# Python
+# Python bytecode
 __pycache__/
 *.py[cod]
-*$py.class
-*.so
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-share/python-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
 
-# Virtual environments
-venv/
-env/
-ENV/
-env.bak/
-venv.bak/
+# Virtual environment (uv)
+.venv/
 
 # IDE
 .vscode/
 .idea/
-*.swp
-*.swo
-*~
 
-# OS generated files
+# OS
 .DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
 Thumbs.db
 
 # Logs
 *.log
 logs/
 
-# Uploads and user content
-#uploads/
+# Uploads and temp files
+uploads/
 temp/
 tmp/
 
-# Secrets and keys
+# Secrets
 *.pem
 *.key
 *.crt
-secrets/
-private/
 
-# Flask/Django specific
-instance/
-.webassets-cache
+# Test artifacts
+.pytest_cache/
 .coverage
 htmlcov/
-.pytest_cache/
-.cache
 
-# Jupyter Notebook
-.ipynb_checkpoints
-
-# pyenv
-.python-version
-
-# pipenv
-Pipfile.lock
-
-# PEP 582
-__pypackages__/
-
-# Celery
-celerybeat-schedule
-celerybeat.pid
-
-# SageMath parsed files
-*.sage.py
-
-# Environments
-.venv
-
-# mypy
-.mypy_cache/
-.dmypy.json
-dmypy.json
-
-# Pyre type checker
-.pyre/
-
-# pytype static type analyzer
-.pytype/
-*.ps1
-
-*.md 
-
+# ML model cache (too large for git — downloaded at Docker build time)
 sentence_transformers/
 
-# Screenshots and agent temp files (from global .gitignore)
+# Agent temp files
 screenshots/
 agent_data/

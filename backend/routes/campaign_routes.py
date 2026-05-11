@@ -3,6 +3,7 @@ Campaign Manager Routes
 API endpoints for application material preparation and submission automation.
 """
 
+import os
 from flask import Blueprint, request, jsonify
 from flask_cors import cross_origin
 import json
@@ -13,6 +14,8 @@ from typing import Optional, Dict, Any
 
 from agents.tools.material_prep import MaterialPreparationTool
 from services.supabase_service import get_supabase_service
+
+CORS_ORIGIN = os.environ.get("CORS_ALLOWED_ORIGIN", "http://localhost:3000")
 
 campaign_bp = Blueprint('campaign', __name__)
 logger = logging.getLogger(__name__)
@@ -70,7 +73,7 @@ def _resolve_application_id(
 
 
 @campaign_bp.route('/prepare-application-materials', methods=['POST', 'OPTIONS'])
-@cross_origin(origins="http://localhost:3000")
+@cross_origin(origins=CORS_ORIGIN)
 def prepare_application_materials():
     """
     Prepare tailored resume and cover letter for a specific job.
@@ -224,7 +227,7 @@ def prepare_application_materials():
 
 
 @campaign_bp.route('/application-materials/<job_id>', methods=['GET', 'OPTIONS'])
-@cross_origin(origins="http://localhost:3000")
+@cross_origin(origins=CORS_ORIGIN)
 def get_application_materials(job_id: str):
     """
     Fetch existing saved application materials (resume + cover letter) for a job.
@@ -286,7 +289,7 @@ def get_application_materials(job_id: str):
 
 
 @campaign_bp.route('/application-status/<job_id>', methods=['GET', 'OPTIONS'])
-@cross_origin(origins="http://localhost:3000")
+@cross_origin(origins=CORS_ORIGIN)
 def get_application_status(job_id: str):
     """
     Get application status for a specific job.
@@ -339,7 +342,7 @@ def get_application_status(job_id: str):
 
 
 @campaign_bp.route('/mark-applied', methods=['POST', 'OPTIONS'])
-@cross_origin(origins="http://localhost:3000")
+@cross_origin(origins=CORS_ORIGIN)
 def mark_applied():
     """Mark a job application as applied and record applied_at timestamp."""
     if request.method == 'OPTIONS':
@@ -388,7 +391,7 @@ def mark_applied():
 
 
 @campaign_bp.route('/user-applications', methods=['GET', 'OPTIONS'])
-@cross_origin(origins="http://localhost:3000")
+@cross_origin(origins=CORS_ORIGIN)
 def get_user_applications():
     """Return jobs the user has applied to (status='applied'), with job details."""
     if request.method == 'OPTIONS':
@@ -447,7 +450,7 @@ def get_user_applications():
 
 
 @campaign_bp.route('/application-materials/save-draft', methods=['POST', 'OPTIONS'])
-@cross_origin(origins="http://localhost:3000")
+@cross_origin(origins=CORS_ORIGIN)
 def save_application_materials_draft():
     """Save user-edited resume and cover letter draft for an application."""
 

@@ -27,25 +27,27 @@ from routes.learning_resources import learning_resources_bp
 from routes.quiz_routes import quiz_bp
 from routes.resume_pdf_routes import resume_pdf_bp
 
+CORS_ORIGIN = os.environ.get("CORS_ALLOWED_ORIGIN", "http://localhost:3000")
+
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 25 * 1024 * 1024  # 25MB upload cap
 CORS(
     app,
     resources={
-        "/upload": {"origins": "http://localhost:3000"},
-        "/get-llm-results/*": {"origins": "http://localhost:3000"},
-        "/recommend-roles": {"origins": "http://localhost:3000"},
-        "/analyze-skill-gap": {"origins": "http://localhost:3000"},
-        "/save-profile": {"origins": "http://localhost:3000"},
-        "/get-profile/*": {"origins": "http://localhost:3000"},
-        "/user-profile": {"origins": "http://localhost:3000"},
-        "/user-profile/*": {"origins": "http://localhost:3000"},
-        "/api/jobs/*": {"origins": "http://localhost:3000"},
-        "/cover-letter-templates": {"origins": "http://localhost:3000"},
-        "/generate-cover-letter": {"origins": "http://localhost:3000"},
-        "/prepare-application-materials": {"origins": "http://localhost:3000"},
-        "/application-materials/save-draft": {"origins": "http://localhost:3000"},
-        "/generate-resume-pdf": {"origins": "http://localhost:3000"},
+        "/upload": {"origins": CORS_ORIGIN},
+        "/get-llm-results/*": {"origins": CORS_ORIGIN},
+        "/recommend-roles": {"origins": CORS_ORIGIN},
+        "/analyze-skill-gap": {"origins": CORS_ORIGIN},
+        "/save-profile": {"origins": CORS_ORIGIN},
+        "/get-profile/*": {"origins": CORS_ORIGIN},
+        "/user-profile": {"origins": CORS_ORIGIN},
+        "/user-profile/*": {"origins": CORS_ORIGIN},
+        "/api/jobs/*": {"origins": CORS_ORIGIN},
+        "/cover-letter-templates": {"origins": CORS_ORIGIN},
+        "/generate-cover-letter": {"origins": CORS_ORIGIN},
+        "/prepare-application-materials": {"origins": CORS_ORIGIN},
+        "/application-materials/save-draft": {"origins": CORS_ORIGIN},
+        "/generate-resume-pdf": {"origins": CORS_ORIGIN},
     },
     supports_credentials=False,
 )
@@ -409,7 +411,7 @@ def index():
 
 @app.route("/upload", methods=["GET", "POST", "OPTIONS"])
 @cross_origin(
-    origins="http://localhost:3000",
+    origins=CORS_ORIGIN,
     methods=["GET", "POST", "OPTIONS"],
     allow_headers=["Content-Type"],
     max_age=86400,
@@ -672,7 +674,7 @@ def upload_resume():
 
 @app.route("/get-llm-results/<job_id>", methods=["GET", "OPTIONS"])
 @cross_origin(
-    origins="http://localhost:3000",
+    origins=CORS_ORIGIN,
     methods=["GET", "OPTIONS"],
     allow_headers=["Content-Type"],
     max_age=86400,
@@ -722,7 +724,7 @@ def get_llm_results(job_id):
 
 @app.route("/recommend-roles", methods=["POST", "OPTIONS"])
 @cross_origin(
-    origins="http://localhost:3000",
+    origins=CORS_ORIGIN,
     methods=["POST", "OPTIONS"],
     allow_headers=["Content-Type"],
     max_age=86400,
@@ -821,7 +823,7 @@ def recommend_roles():
 
 @app.route("/analyze-skill-gap", methods=["POST", "OPTIONS"])
 @cross_origin(
-    origins="http://localhost:3000",
+    origins=CORS_ORIGIN,
     methods=["POST", "OPTIONS"],
     allow_headers=["Content-Type"],
     max_age=86400,
@@ -876,7 +878,7 @@ def analyze_skill_gap_endpoint():
 
 @app.route("/save-profile", methods=["POST", "OPTIONS"])
 @cross_origin(
-    origins="http://localhost:3000",
+    origins=CORS_ORIGIN,
     methods=["POST", "OPTIONS"],
     allow_headers=["Content-Type"],
     max_age=86400,
@@ -930,7 +932,7 @@ def save_profile_endpoint():
 
 @app.route("/get-profile/<user_id>", methods=["GET", "OPTIONS"])
 @cross_origin(
-    origins="http://localhost:3000",
+    origins=CORS_ORIGIN,
     methods=["GET", "OPTIONS"],
     allow_headers=["Content-Type"],
     max_age=86400,
@@ -975,7 +977,7 @@ def get_profile_endpoint(user_id):
 
 @app.route("/user-profile", methods=["POST", "OPTIONS"])
 @cross_origin(
-    origins="http://localhost:3000",
+    origins=CORS_ORIGIN,
     methods=["POST", "OPTIONS"],
     allow_headers=["Content-Type"],
     max_age=86400,
@@ -1008,7 +1010,7 @@ def user_profile_save_alias():
 
 @app.route("/user-profile/<user_id>", methods=["GET", "OPTIONS"])
 @cross_origin(
-    origins="http://localhost:3000",
+    origins=CORS_ORIGIN,
     methods=["GET", "OPTIONS"],
     allow_headers=["Content-Type"],
     max_age=86400,
@@ -1035,7 +1037,7 @@ def user_profile_get_alias(user_id):
 
 @app.route("/api/jobs/<job_id>", methods=["GET", "OPTIONS"])
 @cross_origin(
-    origins="http://localhost:3000",
+    origins=CORS_ORIGIN,
     methods=["GET", "OPTIONS"],
     allow_headers=["Content-Type"],
     max_age=86400,
@@ -1311,7 +1313,7 @@ def _background_vetting_loop(user_id: str, roles: List[str]) -> None:
 
 @app.route("/api/jobs/start-vetting", methods=["POST", "OPTIONS"])
 @cross_origin(
-    origins="http://localhost:3000",
+    origins=CORS_ORIGIN,
     methods=["POST", "OPTIONS"],
     allow_headers=["Content-Type"],
     max_age=86400,
@@ -1359,7 +1361,7 @@ def start_vetting_endpoint():
 
 @app.route("/api/jobs/results", methods=["GET", "OPTIONS"])
 @cross_origin(
-    origins="http://localhost:3000",
+    origins=CORS_ORIGIN,
     methods=["GET", "OPTIONS"],
     allow_headers=["Content-Type"],
     max_age=86400,

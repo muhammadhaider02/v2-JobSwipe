@@ -13,6 +13,7 @@ from flask_cors import cross_origin
 from jinja2 import Environment, FileSystemLoader
 
 logger = logging.getLogger(__name__)
+CORS_ORIGIN = os.environ.get("CORS_ALLOWED_ORIGIN", "http://localhost:3000")
 
 resume_pdf_bp = Blueprint("resume_pdf", __name__)
 
@@ -136,7 +137,7 @@ def _flatten_resume_json(raw: dict) -> dict:
 
 @resume_pdf_bp.route("/generate-resume-pdf", methods=["POST", "OPTIONS"])
 @cross_origin(
-    origins="http://localhost:3000",
+    origins=CORS_ORIGIN,
     methods=["POST", "OPTIONS"],
     allow_headers=["Content-Type"],
     max_age=86400,
