@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, render_template
+from flask import Flask, request, jsonify
 from flask_cors import CORS, cross_origin
 import os
 import re
@@ -404,9 +404,9 @@ def extract_contact_info(text: str, urls=None):
 
 
 @app.route("/")
+@app.route("/health")
 def index():
-    """Serve the upload page"""
-    return render_template("index.html")
+    return jsonify({"status": "ok", "service": "JobSwipe API"})
 
 
 @app.route("/upload", methods=["GET", "POST", "OPTIONS"])
