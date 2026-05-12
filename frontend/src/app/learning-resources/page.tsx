@@ -352,17 +352,6 @@ export default function LearningResourcesPage() {
                     <h2 className="text-3xl font-bold capitalize mb-2">
                       {filteredResource.skill}
                     </h2>
-                    <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                      <span>
-                        📊 Confidence: {(filteredResource.total_confidence * 100).toFixed(0)}%
-                      </span>
-                      <span>
-                        📖 {filteredResource.google_results.length} Articles
-                      </span>
-                      <span>
-                        🎥 {filteredResource.youtube_playlists.length} Videos
-                      </span>
-                    </div>
                   </Card>
 
                   {/* Articles Section */}
