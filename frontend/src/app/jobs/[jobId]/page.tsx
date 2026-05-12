@@ -8,8 +8,6 @@ import { Button } from "@/components/ui/button";
 import { ArrowLeft, FileText, ChevronDown, Check, Loader2, X, Download } from "lucide-react";
 import Link from "next/link";
 
-const BACKEND_BASE = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
-
 type JobData = Record<string, any>;
 
 type TemplateItem = {
@@ -123,7 +121,7 @@ export default function JobApplicationMaterialsPage() {
             return;
           }
 
-          await fetch(`${BACKEND_BASE}/application-materials/save-draft`, {
+          await fetch(`/api/application-materials/save-draft`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -174,8 +172,8 @@ export default function JobApplicationMaterialsPage() {
         setUserId(uid);
 
         const [jobRes, templatesRes] = await Promise.all([
-          fetch(`${BACKEND_BASE}/api/jobs/${encodeURIComponent(jobId)}`),
-          fetch(`${BACKEND_BASE}/cover-letter-templates`),
+          fetch(`/api/jobs/${encodeURIComponent(jobId)}`),
+          fetch(`/api/cover-letter-templates`),
         ]);
 
         if (jobRes.ok) {
@@ -196,7 +194,7 @@ export default function JobApplicationMaterialsPage() {
         }
 
         const existingRes = await fetch(
-          `${BACKEND_BASE}/application-materials/${encodeURIComponent(jobId)}?user_id=${uid}`
+          `/api/application-materials/${encodeURIComponent(jobId)}?user_id=${uid}`
         );
 
         if (existingRes.ok) {
@@ -210,7 +208,7 @@ export default function JobApplicationMaterialsPage() {
         }
 
         const defaultSections = ["summary", "experience", "skills"];
-        const prepareRes = await fetch(`${BACKEND_BASE}/prepare-application-materials`, {
+        const prepareRes = await fetch(`/api/prepare-application-materials`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -248,7 +246,7 @@ export default function JobApplicationMaterialsPage() {
     setError(null);
 
     try {
-      const res = await fetch(`${BACKEND_BASE}/generate-cover-letter`, {
+      const res = await fetch(`/api/generate-cover-letter`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -275,7 +273,7 @@ export default function JobApplicationMaterialsPage() {
     setError(null);
 
     try {
-      const res = await fetch(`${BACKEND_BASE}/prepare-application-materials`, {
+      const res = await fetch(`/api/prepare-application-materials`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -323,7 +321,7 @@ export default function JobApplicationMaterialsPage() {
       const fileName = `${companyName}-${userName}-Resume.pdf`;
       setPdfFileName(fileName);
 
-      const res = await fetch(`${BACKEND_BASE}/generate-resume-pdf`, {
+      const res = await fetch(`/api/generate-resume-pdf`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ resume_json: parsedResume }),
@@ -385,7 +383,7 @@ export default function JobApplicationMaterialsPage() {
       const companyName = job?.company ? toPascalCase(job.company.trim()) : "Company";
       const fileName = `${companyName}-${userName}-Resume.pdf`;
 
-      const res = await fetch(`${BACKEND_BASE}/generate-resume-pdf`, {
+      const res = await fetch(`/api/generate-resume-pdf`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ resume_json: parsedResume }),
@@ -418,7 +416,7 @@ export default function JobApplicationMaterialsPage() {
 
       // Record the application in the database (fire-and-forget)
       if (userId && jobId) {
-        fetch(`${BACKEND_BASE}/mark-applied`, {
+        fetch(`/api/mark-applied`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ user_id: userId, job_id: jobId, application_id: applicationId }),

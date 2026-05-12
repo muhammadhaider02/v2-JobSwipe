@@ -101,14 +101,12 @@ function RecommendationsContent() {
         // Skills have changed (or no cache) — persist new skills and re-fetch
         sessionStorage.setItem('userSkills', JSON.stringify(skills));
 
-        const base = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5000';
-
         // Add timeout to avoid hanging forever
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 30000);
 
         try {
-          const res = await fetch(`${base}/recommend-roles`, {
+          const res = await fetch(`/api/recommend-roles`, {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
@@ -136,7 +134,7 @@ function RecommendationsContent() {
 
               // Fallback: fetch it if missing (legacy support)
               try {
-                const gapRes = await fetch(`${base}/analyze-skill-gap`, {
+                const gapRes = await fetch(`/api/analyze-skill-gap`, {
                   method: "POST",
                   headers: {
                     "Content-Type": "application/json",
@@ -204,10 +202,8 @@ function RecommendationsContent() {
     }
 
     try {
-      const base = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:5000';
-
       // First, fetch the existing user profile
-      const profileResponse = await fetch(`${base}/user-profile/${userId}`);
+      const profileResponse = await fetch(`/api/user-profile/${userId}`);
 
       if (profileResponse.ok) {
         const profileData = await profileResponse.json();
@@ -217,7 +213,7 @@ function RecommendationsContent() {
         const recommendedRoleNames = recommendations.map(rec => rec.role);
 
         // Merge recommended roles with existing profile
-        await fetch(`${base}/user-profile`, {
+        await fetch(`/api/user-profile`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -230,7 +226,7 @@ function RecommendationsContent() {
       } else {
         // If no existing profile, just save the recommended roles
         const recommendedRoleNames = recommendations.map(rec => rec.role);
-        await fetch(`${base}/user-profile`, {
+        await fetch(`/api/user-profile`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",

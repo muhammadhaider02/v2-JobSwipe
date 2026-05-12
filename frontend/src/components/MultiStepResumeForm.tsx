@@ -279,8 +279,7 @@ export default function MultiStepResumeForm({ userId }: MultiStepResumeFormProps
         };
 
         // Save profile to backend
-        const base = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
-        const response = await fetch(`${base}/save-profile`, {
+        const response = await fetch(`/api/save-profile`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -363,8 +362,7 @@ export default function MultiStepResumeForm({ userId }: MultiStepResumeFormProps
       }
 
       try {
-        const base = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
-        const response = await fetch(`${base}/get-profile/${userId}`);
+        const response = await fetch(`/api/get-profile/${userId}`);
         
         if (response.ok) {
           const result = await response.json();
@@ -1149,12 +1147,9 @@ function ResumeAutofillButton({
   }, []);
 
   async function pollLLMResults(jobId: string) {
-    const base =
-      process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
-
     const poll = async () => {
       try {
-        const res = await fetch(`${base}/get-llm-results/${jobId}`);
+        const res = await fetch(`/api/get-llm-results/${jobId}`);
         if (!res.ok) {
           if (res.status === 404) {
             setLlmStatus("failed");
@@ -1267,9 +1262,7 @@ function ResumeAutofillButton({
     try {
       const form = new FormData();
       form.append("file", f);
-      const base =
-        process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
-      const res = await fetch(`${base}/upload`, {
+      const res = await fetch(`/api/upload`, {
         method: "POST",
         body: form,
       });

@@ -5,8 +5,6 @@ import { ArrowLeft, Clock, Briefcase, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 
-const BACKEND_BASE = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
-
 type AppliedJob = {
   job_id: string;
   title: string;
@@ -40,7 +38,7 @@ export default function JobsAppliedPage() {
         if (!user?.id) return;
 
         const res = await fetch(
-          `${BACKEND_BASE}/user-applications?user_id=${user.id}`
+          `/api/user-applications?user_id=${user.id}`
         );
         if (!res.ok) return;
         const data = await res.json();

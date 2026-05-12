@@ -195,9 +195,8 @@ export default function SkillQuizPage() {
   const fetchQuiz = async () => {
     try {
       setLoading(true);
-      const base = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
       const response = await fetch(
-        `${base}/skill-quiz/${encodeURIComponent(skill)}`
+        `/api/skill-quiz/${encodeURIComponent(skill)}`
       );
       if (!response.ok) throw new Error('Failed to fetch quiz');
       const data: QuizResponse = await response.json();
@@ -220,8 +219,7 @@ export default function SkillQuizPage() {
       const supabase = createClient();
       const { data: { user } } = await supabase.auth.getUser();
 
-      const base = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
-      const response = await fetch(`${base}/quiz-submit`, {
+      const response = await fetch(`/api/quiz-submit`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

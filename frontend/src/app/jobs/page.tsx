@@ -15,7 +15,6 @@ import {
   Loader2,
 } from "lucide-react";
 
-const BACKEND_BASE = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
 const POLL_INTERVAL_MS = 2000;
 const REFILL_THRESHOLD = 10;
 
@@ -347,7 +346,7 @@ export default function JobsPage() {
       if (user?.id) {
         // Fetch applied job IDs before setting userId so the init effect sees them
         try {
-          const res = await fetch(`${BACKEND_BASE}/user-applications?user_id=${user.id}`);
+          const res = await fetch(`/api/user-applications?user_id=${user.id}`);
           if (res.ok) {
             const data = await res.json();
             appliedIdsRef.current = new Set(
@@ -376,7 +375,7 @@ export default function JobsPage() {
       const since = sinceRef.current;
       const consumed = indexRef.current;
       const res = await fetch(
-        `${BACKEND_BASE}/api/jobs/results?user_id=${uid}&since=${since}&consumed=${consumed}`
+        `/api/jobs/results?user_id=${uid}&since=${since}&consumed=${consumed}`
       );
       if (!res.ok) return;
 
@@ -454,7 +453,7 @@ export default function JobsPage() {
       }
 
       async function begin() {
-        const res = await fetch(`${BACKEND_BASE}/api/jobs/start-vetting`, {
+        const res = await fetch(`/api/jobs/start-vetting`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ user_id: userId, roles }),

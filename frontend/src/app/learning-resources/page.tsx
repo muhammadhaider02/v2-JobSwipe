@@ -94,8 +94,7 @@ export default function LearningResourcesPage() {
     setError(null);
 
     try {
-      const base = process.env.NEXT_PUBLIC_BACKEND_URL || "http://localhost:5000";
-      const response = await fetch(`${base}/learning-resources`, {
+      const response = await fetch(`/api/learning-resources`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
