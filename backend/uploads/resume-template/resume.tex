@@ -12,13 +12,12 @@
   citecolor=black
 }
 
-\usepackage{fontawesome5}
 \usepackage{hyperref}
 \usepackage[normalem]{ulem}
-\usepackage{xcolor}
 \usepackage[dvipsnames]{xcolor}
 \usepackage{enumitem}
-\usepackage[sfdefault]{inter}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
 \newcommand{\bluebf}[1]{\textbf{\textcolor{RoyalBlue}{#1}}}
 \newcommand{\blueicon}[1]{\textcolor{RoyalBlue}{#1}}
 \renewcommand\labelitemi{\scriptsize$\bullet$}
@@ -31,12 +30,12 @@
 \vspace{-1.6em}
 
 \begin{center}
-  \href{mailto:((personal_info.email))}{\blueicon{\faEnvelope}\hspace{0.3em} ((personal_info.email))} \quad
-  \blueicon{\faPhone}\hspace{0.3em} ((personal_info.phone)) \quad
-  \blueicon{\faMapMarker*}\hspace{0.3em} ((personal_info.location)) \\[0.5em]
-  \href{((personal_info.linkedin))}{\blueicon{\faLinkedin}\hspace{0.3em} ((personal_info.linkedin | replace("https://", "")))}((* if personal_info.github *)) \quad
-  \href{((personal_info.github))}{\blueicon{\faGithub}\hspace{0.3em} ((personal_info.github | replace("https://", "")))}((* endif *))((* if personal_info.portfolio *)) \quad
-  \href{((personal_info.portfolio))}{\blueicon{\faGlobe}\hspace{0.3em} ((personal_info.portfolio | replace("https://", "")))}((* endif *))
+  \href{mailto:((personal_info.email))}{((personal_info.email))} \quad
+  ((personal_info.phone)) \quad
+  ((personal_info.location)) \\[0.5em]
+  \href{((personal_info.linkedin))}{((personal_info.linkedin | replace("https://", "")))}((* if personal_info.github *)) \quad
+  \href{((personal_info.github))}{((personal_info.github | replace("https://", "")))}((* endif *))((* if personal_info.portfolio *)) \quad
+  \href{((personal_info.portfolio))}{((personal_info.portfolio | replace("https://", "")))}((* endif *))
 \end{center}
 
 %----------------------------------------------------------------------------------------
@@ -78,7 +77,7 @@
 
 ((* for project in projects *))
 \vspace{-0.25em}
-\item \textbf{((project.name))}((* if project.link *)) \href{((project.link))}{\faGithub}((* endif *))
+\item \textbf{((project.name))}((* if project.link *)) \href{((project.link))}{[Link]}((* endif *))
 \begin{itemize}
 \itemsep -1.75pt {}
 ((* for line in project.description.split('\n') *))
