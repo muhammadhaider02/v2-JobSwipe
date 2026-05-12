@@ -21,7 +21,7 @@ class HuggingFaceService:
         """Initialize HuggingFace service with API credentials"""
         self.api_key = os.getenv("HUGGINGFACE_API_KEY")
         
-        self.model_id = "meta-llama/Meta-Llama-3.1-8B-Instruct"
+        self.model_id = os.getenv("HF_MODEL_ID", "Qwen/Qwen2.5-7B-Instruct")
         
         if not self.api_key:
             logger.warning("HUGGINGFACE_API_KEY not set. LLM optimization will not work.")

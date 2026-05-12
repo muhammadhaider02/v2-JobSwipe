@@ -5,7 +5,9 @@ __pycache__/
 .env
 .env.*
 *.env
-uploads/
+uploads/*
+!uploads/cover-letter-templates/
+!uploads/resume-template/
 agent_data/
 screenshots/
 models/sentence_transformers/
