@@ -164,9 +164,11 @@ function RecommendationsContent() {
           );
 
           setRecommendations(recommendationsWithGapData);
-          // Cache recommendations and the skills they were computed for
-          sessionStorage.setItem('recommendations', JSON.stringify(recommendationsWithGapData));
-          sessionStorage.setItem('cachedRecommendationSkills', JSON.stringify(skills));
+          // Cache recommendations and the skills they were computed for (never cache empty results)
+          if (recommendationsWithGapData.length > 0) {
+            sessionStorage.setItem('recommendations', JSON.stringify(recommendationsWithGapData));
+            sessionStorage.setItem('cachedRecommendationSkills', JSON.stringify(skills));
+          }
         } catch (fetchError: any) {
           clearTimeout(timeoutId);
           if (fetchError.name === 'AbortError') {
