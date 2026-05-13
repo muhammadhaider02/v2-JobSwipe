@@ -11,6 +11,9 @@ from services.resource_ranker import ResourceRanker
 from services.result_normalizer import ResultNormalizer
 from utils.query_builder import QueryBuilder
 from models.learning_resources import SkillResources
+from src.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 
 class LearningResourcesService:
@@ -41,9 +44,7 @@ class LearningResourcesService:
         Returns:
             SkillResources object with all resources
         """
-        print(f"\n{'='*60}")
-        print(f"Generating resources for: {skill}")
-        print(f"{'='*60}")
+        logger.info("Generating resources for skill=%s", skill)
         
         # Step 1: Generate Google results
         google_results = self._fetch_and_rank_google_results(skill, num_google_results)
@@ -58,9 +59,10 @@ class LearningResourcesService:
             youtube_results=youtube_results
         )
         
-        print(f"\n✓ Generated {len(google_results)} Google results")
-        print(f"✓ Generated {len(youtube_results)} YouTube results")
-        print(f"✓ Total confidence: {skill_resources.total_confidence:.2f}")
+        logger.info(
+            "Generated %d Google results, %d YouTube results, total_confidence=%.2f",
+            len(google_results), len(youtube_results), skill_resources.total_confidence,
+        )
         
         return skill_resources
     
@@ -83,10 +85,7 @@ class LearningResourcesService:
         Returns:
             List of SkillResources objects
         """
-        print(f"\n{'='*60}")
-        print(f"Generating resources for {len(skills)} skills")
-        print(f"Parallel processing: {parallel}")
-        print(f"{'='*60}")
+        logger.info("Generating resources for %d skills, parallel=%s", len(skills), parallel)
         
         if parallel:
             # Process skills in parallel using ThreadPoolExecutor
@@ -114,7 +113,7 @@ class LearningResourcesService:
         seen_urls = set()
         
         for query in queries:
-            print(f"  Google query: {query}")
+            logger.debug("Google query: %s", query)
             raw_results = self.google_service.search(query, num_results=10)
             
             for raw_result in raw_results:
@@ -145,7 +144,7 @@ class LearningResourcesService:
         # Sort by confidence
         sorted_results = sorted(filtered, key=lambda x: x.confidence, reverse=True)
         
-        print(f"  ✓ Filtered {len(all_results)} → {len(filtered)} results (threshold: {self.ranker.MIN_CONFIDENCE_THRESHOLD})")
+        logger.debug("Filtered %d -> %d results (threshold: %s)", len(all_results), len(filtered), self.ranker.MIN_CONFIDENCE_THRESHOLD)
         
         # Return top N
         return sorted_results[:target_count]
@@ -159,7 +158,7 @@ class LearningResourcesService:
         seen_urls = set()
         
         for query in queries:
-            print(f"  YouTube query: {query}")
+            logger.debug("YouTube query: %s", query)
             
             # Try playlists first
             raw_playlists = self.youtube_service.search_playlists(query, max_results=5)
@@ -183,7 +182,7 @@ class LearningResourcesService:
         
         # If we don't have enough playlists, fetch videos as fallback
         if len(all_results) < target_count:
-            print(f"  Fetching YouTube videos as fallback...")
+            logger.debug("Fetching YouTube videos as fallback")
             for query in queries[:1]:  # Only first query for videos
                 raw_videos = self.youtube_service.search_videos(query, max_results=5)
                 

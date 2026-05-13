@@ -279,7 +279,7 @@ export default function MultiStepResumeForm({
         if (!response.ok) throw new Error('Failed to save profile');
 
         const result = await response.json();
-        console.log('Profile saved:', result);
+        console.log('Profile saved successfully');
 
         sessionStorage.setItem(
           'userSkills',
@@ -290,7 +290,7 @@ export default function MultiStepResumeForm({
         sessionStorage.removeItem('cachedRecommendationSkills');
         window.location.href = '/recommendations';
       } catch (error) {
-        console.error('Error saving profile:', error);
+        console.error('Error saving profile:', error instanceof Error ? error.message : 'Unknown error');
         alert('Failed to save profile. Please try again.');
       } finally {
         setIsSavingProfile(false);
@@ -416,11 +416,10 @@ export default function MultiStepResumeForm({
               ),
             });
 
-            console.log('Profile loaded successfully');
           }
         }
       } catch (error) {
-        console.error('Error loading profile:', error);
+        console.error('Error loading profile:', error instanceof Error ? error.message : 'Unknown error');
       } finally {
         setIsLoadingProfile(false);
       }

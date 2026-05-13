@@ -5,10 +5,13 @@ Loads environment variables and provides centralized configuration access.
 """
 
 import os
+import logging
 from pathlib import Path
 from typing import Optional
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+logger = logging.getLogger(__name__)
 
 
 class Settings(BaseSettings):
@@ -121,8 +124,7 @@ def get_settings() -> Settings:
         # Validate required fields
         missing = _settings.validate_required_fields()
         if missing:
-            print(f"⚠️  Warning: Missing required environment variables: {', '.join(missing)}")
-            print("   Some features may not work correctly.")
+            logger.warning("Missing required environment variables: %s. Some features may not work correctly.", ", ".join(missing))
     
     return _settings
 

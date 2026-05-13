@@ -9,7 +9,6 @@ from pdfminer.high_level import extract_text
 from docx import Document
 from utils.section_splitter import (
     split_resume_into_sections,
-    print_sections,
     parse_skills_from_text,
 )
 from src.llama_refiner import refine_resume, refine_projects
@@ -18,6 +17,9 @@ from src.skill_gap_analysis import analyze_skill_gap
 from src.skill_enrichment import enrich_skills
 from services.supabase_service import SupabaseService
 from config.settings import get_settings
+from src.logging_config import get_logger, redact_uid
+
+logger = get_logger(__name__)
 
 # Import blueprints
 from routes.campaign_routes import campaign_bp
@@ -67,6 +69,12 @@ app.register_blueprint(cover_letter_bp)
 app.register_blueprint(learning_resources_bp)
 app.register_blueprint(quiz_bp)
 app.register_blueprint(resume_pdf_bp)
+
+
+@app.after_request
+def log_request(response):
+    logger.info("%s %s %s", request.method, request.path, response.status_code)
+    return response
 
 
 def _normalize_profile_payload(data):
@@ -224,7 +232,7 @@ def extract_links_from_pdf(path: str):
                 for u in url_pattern.findall(page_text):
                     urls.append(u)
     except Exception as e:
-        print(f"PDF link extraction failed: {e}")
+        logger.error("PDF link extraction failed: %s", e)
 
     # Deduplicate while preserving order
     seen = set()
@@ -452,25 +460,18 @@ def upload_resume():
     try:
         os.remove(path)
     except Exception as e:
-        print(f"Warning: Failed to delete temporary upload file '{path}': {e}")
+        logger.warning("Failed to delete temporary upload file '%s': %s", path, e)
 
     # Step 2: Extract contact information + links
     contact_info = extract_contact_info(text, urls=urls)
 
-    print("\n==== Contact Information ====")
-    print(f"Name: {contact_info['name']}")
-    print(f"Email: {contact_info['email']}")
-    print(f"Phone: {contact_info['phone']}")
-    print(f"Location: {contact_info['location']}")
-    print(f"LinkedIn: {contact_info['linkedin']}")
-    print(f"GitHub: {contact_info['github']}")
-    print(f"Portfolio: {contact_info['portfolio']}")
+    logger.info("Contact information extracted, fields present: %s",
+                 [k for k, v in contact_info.items() if v])
 
     # Step 3: Split resume into sections
     sections = split_resume_into_sections(text)
 
-    # Print sections to terminal for debugging
-    print_sections(sections)
+    logger.debug("Parsed %d resume sections: %s", len(sections), list(sections.keys()))
 
     # Summary from Profile (Objective) section
     summary_text = sections.get("Profile", "").strip()
@@ -490,7 +491,7 @@ def upload_resume():
         parsed_skills = parse_skills_from_text(sections.get("Skills", ""))
     except Exception as e:
         parsed_skills = []
-        print(f"Error parsing skills: {e}")
+        logger.error("Error parsing skills: %s", e)
 
     # Immediate JSON response (skills only — no regex projects)
     immediate_response = {
@@ -535,22 +536,13 @@ def upload_resume():
     # Background skill enrichment
     def process_skill_enrichment_in_background():
         try:
-            print(
-                f"\n==== Starting Skill Enrichment for job {job_id} ====",
-                flush=True,
-            )
+            logger.info("Starting skill enrichment for job=%s", job_id)
             enriched_skills = enrich_skills(text, parsed_skills)
             llm_jobs[job_id]["skill_enrichment"]["status"] = "completed"
             llm_jobs[job_id]["skill_enrichment"]["skills"] = enriched_skills
-            print(
-                f"\n==== Skill Enrichment COMPLETED for job {job_id} ====",
-                flush=True,
-            )
+            logger.info("Skill enrichment completed for job=%s", job_id)
         except Exception as e:
-            print(
-                f"\n==== Skill Enrichment FAILED for job {job_id}: {e} ====",
-                flush=True,
-            )
+            logger.error("Skill enrichment failed for job=%s: %s", job_id, e)
             llm_jobs[job_id]["skill_enrichment"]["status"] = "failed"
             llm_jobs[job_id]["skill_enrichment"]["error"] = str(e)
 
@@ -560,10 +552,7 @@ def upload_resume():
         # Stagger slightly to avoid all 3 background jobs hammering the API at once
         time.sleep(0.5)
         try:
-            print(
-                f"\n==== Starting LLM Background Processing for job {job_id} ====",
-                flush=True,
-            )
+            logger.info("Starting LLM background processing for job=%s", job_id)
 
             ordered_for_llm = ["Education", "Experience"]
             resume_text_for_llm = "\n\n".join(
@@ -578,15 +567,10 @@ def upload_resume():
             model_name = get_settings().sambanova_model
             base_url = get_settings().sambanova_base_url
 
-            print("\n==== LLM CONFIG ====", flush=True)
-            print(f"backend={backend}", flush=True)
-            print(f"model={model_name}", flush=True)
-            print(f"base_url={base_url}", flush=True)
-            print(
-                "\n==== LLM INPUT: Resume text (Education/Experience ONLY) ====",
-                flush=True,
-            )
-            print(resume_text_for_llm or "(empty)", flush=True)
+            logger.debug("LLM config: backend=%s model=%s base_url=%s",
+                         backend, model_name, base_url)
+            logger.debug("Resume text length: %d chars",
+                         len(resume_text_for_llm))
 
             refined = refine_resume(
                 resume_text=resume_text_for_llm,
@@ -601,15 +585,9 @@ def upload_resume():
             llm_jobs[job_id]["status"] = "completed"
             llm_jobs[job_id]["result"] = refined
 
-            print(
-                f"\n==== LLM Background Processing COMPLETED for job {job_id} ====",
-                flush=True,
-            )
+            logger.info("LLM background processing completed for job=%s", job_id)
         except Exception as e:
-            print(
-                f"\n==== LLM Background Processing FAILED for job {job_id}: {e} ====",
-                flush=True,
-            )
+            logger.error("LLM background processing failed for job=%s: %s", job_id, e)
             llm_jobs[job_id]["status"] = "failed"
             llm_jobs[job_id]["error"] = str(e)
 
@@ -619,10 +597,7 @@ def upload_resume():
         # Stagger more to prevent hitting rate limit with the other two jobs
         time.sleep(1.0)
         try:
-            print(
-                f"\n==== Starting Projects LLM for job {job_id} ====",
-                flush=True,
-            )
+            logger.info("Starting projects LLM for job=%s", job_id)
             projects_text = sections.get("Projects", "")
             backend = os.getenv("LLAMA_BACKEND", "openai_compat")
             model_name = get_settings().sambanova_model
@@ -646,15 +621,9 @@ def upload_resume():
 
             llm_jobs[job_id]["project_llm"]["status"] = "completed"
             llm_jobs[job_id]["project_llm"]["projects"] = extracted_projects
-            print(
-                f"\n==== Projects LLM COMPLETED for job {job_id} ====",
-                flush=True,
-            )
+            logger.info("Projects LLM completed for job=%s", job_id)
         except Exception as e:
-            print(
-                f"\n==== Projects LLM FAILED for job {job_id}: {e} ====",
-                flush=True,
-            )
+            logger.error("Projects LLM failed for job=%s: %s", job_id, e)
             llm_jobs[job_id]["project_llm"]["status"] = "failed"
             llm_jobs[job_id]["project_llm"]["error"] = str(e)
 
@@ -747,9 +716,7 @@ def recommend_roles():
 
         top_k = data.get("top_k", 10)
 
-        print(f"\n==== ROLE RECOMMENDATION REQUEST ====")
-        print(f"Skills: {skills}")
-        print(f"Top K: {top_k}")
+        logger.info("Role recommendation request: %d skills, top_k=%d", len(skills), top_k)
 
         result = get_role_recommendations(skills, top_k=top_k)
 
@@ -790,10 +757,10 @@ def recommend_roles():
                     }
                 })
                 
-                print(f"Role: {role}, Skill Match: {completion_percentage}%")
-                
+                logger.debug("Role: %s, Skill Match: %s%%", role, completion_percentage)
+
             except Exception as e:
-                print(f"Error analyzing skill gap for {role}: {e}")
+                logger.error("Error analyzing skill gap for %s: %s", role, e)
                 continue
 
         # Filter: only roles with >= 50% skill match
@@ -814,10 +781,7 @@ def recommend_roles():
         )
 
     except Exception as e:
-        print(f"Error in recommend_roles: {e}")
-        import traceback
-
-        traceback.print_exc()
+        logger.error("Error in recommend_roles: %s", e, exc_info=True)
         return jsonify({"error": str(e)}), 500
 
 
@@ -849,30 +813,25 @@ def analyze_skill_gap_endpoint():
         if not skills or not isinstance(skills, list):
             return jsonify({"error": "Skills must be a non-empty array"}), 400
 
-        print(f"\n==== SKILL GAP ANALYSIS REQUEST ====")
-        print(f"Role: {role}")
-        print(f"User Skills: {skills}")
+        logger.info("Skill gap analysis request: role=%s, %d skills", role, len(skills))
 
         # Perform skill gap analysis
         result = analyze_skill_gap(role, skills)
 
-        print(f"\n==== SKILL GAP ANALYSIS RESPONSE ====")
-        print(f"Existing Skills: {result['existing_skills']}")
-        print(f"Required Skills: {result['required_skills']}")
-        print(f"Completion: {result['completion_percentage']}%")
+        logger.debug("Skill gap result: %d existing, %d required, %s%% completion",
+                     len(result['existing_skills']),
+                     len(result['required_skills']),
+                     result['completion_percentage'])
 
         return jsonify(result)
 
     except ValueError as e:
         # Handle role not found or other validation errors
-        print(f"Validation error in analyze_skill_gap: {e}")
+        logger.warning("Validation error in analyze_skill_gap: %s", e)
         return jsonify({"error": str(e)}), 404
 
     except Exception as e:
-        print(f"Error in analyze_skill_gap: {e}")
-        import traceback
-
-        traceback.print_exc()
+        logger.error("Error in analyze_skill_gap: %s", e, exc_info=True)
         return jsonify({"error": str(e)}), 500
 
 
@@ -903,30 +862,27 @@ def save_profile_endpoint():
         if not profile_data:
             return jsonify({"error": "profile_data is required"}), 400
 
-        print(f"\n==== SAVING USER PROFILE ====")
-        print(f"User ID: {user_id}")
-        print(f"Profile fields: {list(profile_data.keys())}")
+        logger.info("Saving user profile for user=%s, fields=%s",
+                    redact_uid(user_id), list(profile_data.keys()))
 
         # Save profile to database
         success = supabase_service.upsert_user_profile(user_id, profile_data)
 
         if success:
-            print(f"✅ Profile saved successfully for user {user_id}")
+            logger.info("Profile saved successfully for user=%s", redact_uid(user_id))
             return jsonify({
                 "success": True,
                 "message": "Profile saved successfully"
             }), 200
         else:
-            print(f"❌ Failed to save profile for user {user_id}")
+            logger.error("Failed to save profile for user=%s", redact_uid(user_id))
             return jsonify({
                 "success": False,
                 "error": "Failed to save profile"
             }), 500
 
     except Exception as e:
-        print(f"Error in save_profile: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.error("Error in save_profile: %s", e, exc_info=True)
         return jsonify({"error": str(e)}), 500
 
 
@@ -948,20 +904,19 @@ def get_profile_endpoint(user_id):
         if not user_id:
             return jsonify({"error": "user_id is required"}), 400
 
-        print(f"\n==== FETCHING USER PROFILE ====")
-        print(f"User ID: {user_id}")
+        logger.info("Fetching user profile for user=%s", redact_uid(user_id))
 
         # Get profile from database
         profile = supabase_service.get_user_profile(user_id)
 
         if profile:
-            print(f"✅ Profile retrieved successfully for user {user_id}")
+            logger.info("Profile retrieved successfully for user=%s", redact_uid(user_id))
             return jsonify({
                 "success": True,
                 "profile": profile
             }), 200
         else:
-            print(f"⚠️  No profile found for user {user_id}")
+            logger.warning("No profile found for user=%s", redact_uid(user_id))
             return jsonify({
                 "success": False,
                 "profile": None,
@@ -969,9 +924,7 @@ def get_profile_endpoint(user_id):
             }), 404
 
     except Exception as e:
-        print(f"Error in get_profile: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.error("Error in get_profile: %s", e, exc_info=True)
         return jsonify({"error": str(e)}), 500
 
 
@@ -1004,7 +957,7 @@ def user_profile_save_alias():
         return jsonify({"success": True, "message": "Profile saved successfully"}), 200
 
     except Exception as e:
-        print(f"Error in user_profile alias save: {e}")
+        logger.error("Error in user_profile alias save: %s", e)
         return jsonify({"error": str(e)}), 500
 
 
@@ -1031,7 +984,7 @@ def user_profile_get_alias(user_id):
         return jsonify({"success": True, "profile": profile}), 200
 
     except Exception as e:
-        print(f"Error in user_profile alias get: {e}")
+        logger.error("Error in user_profile alias get: %s", e)
         return jsonify({"error": str(e)}), 500
 
 
@@ -1058,7 +1011,7 @@ def get_job_detail_endpoint(job_id):
         return jsonify({"success": True, "job": job}), 200
 
     except Exception as e:
-        print(f"Error in get job detail: {e}")
+        logger.error("Error in get job detail: %s", e)
         return jsonify({"error": str(e)}), 500
 
 
@@ -1192,7 +1145,7 @@ def _background_vetting_loop(user_id: str, roles: List[str]) -> None:
         # Fetch user profile once
         user_profile = fetch_user_profile(user_id)
         if not user_profile:
-            print(f"[vetting thread] No profile for {user_id}, aborting.")
+            logger.warning("Vetting thread: no profile for user=%s, aborting", redact_uid(user_id))
             _vs_set_status(user_id, "done")
             return
 
@@ -1215,13 +1168,13 @@ def _background_vetting_loop(user_id: str, roles: List[str]) -> None:
         approved_count = 0
         db_exhausted = False
 
-        print(f"[vetting thread] Started for user={user_id[:8]}... roles={roles}")
+        logger.info("Vetting thread started for user=%s, roles=%s", redact_uid(user_id), roles)
 
         while not db_exhausted:
             # ── TTL watchdog ──────────────────────────────────────────────
             idle_secs = time.time() - _vs_get_poll(user_id)
             if idle_secs > VETTING_IDLE_TTL:
-                print(f"[vetting thread] {idle_secs:.0f}s idle — stopping.")
+                logger.info("Vetting thread: %.0fs idle, stopping", idle_secs)
                 break
 
             # ── Pause when buffer ahead of consumer is full ────────────────
@@ -1237,14 +1190,14 @@ def _background_vetting_loop(user_id: str, roles: List[str]) -> None:
 
             if not batch:
                 db_exhausted = True
-                print(f"[vetting thread] DB exhausted at cursor={cursor}.")
+                logger.info("Vetting thread: DB exhausted at cursor=%d", cursor)
                 break
 
             # ── Vet each job in the batch ─────────────────────────────────
             for raw_job in batch:
                 # Inner TTL check
                 if time.time() - _vs_get_poll(user_id) > VETTING_IDLE_TTL:
-                    print(f"[vetting thread] TTL expired inside batch — stopping.")
+                    logger.info("Vetting thread: TTL expired inside batch, stopping")
                     db_exhausted = True
                     break
 
@@ -1275,7 +1228,7 @@ def _background_vetting_loop(user_id: str, roles: List[str]) -> None:
                         "location_fit":         loc_score,
                     })
                 except Exception as score_err:
-                    print(f"[vetting thread] Scoring error for {job_id_key}: {score_err}")
+                    logger.error("Vetting thread: scoring error for job=%s: %s", job_id_key, score_err)
                     continue
 
                 if final_score < MIN_SCORE_THRESHOLD:
@@ -1293,19 +1246,17 @@ def _background_vetting_loop(user_id: str, roles: List[str]) -> None:
                 }
                 _vs_push_job(user_id, vetted)
                 approved_count += 1
-                print(f"[vetting] ✅ {job.get('title', '?')} score={final_score:.2f}")
+                logger.debug("Vetting approved: %s score=%.2f", job.get('title', '?'), final_score)
 
                 if (approved_count - _vs_get_consumed(user_id)) >= VETTING_BUFFER:
                     break
 
         _vs_set_status(user_id, "done")
         final_count = _vs_job_count(user_id)
-        print(f"[vetting thread] Done. {final_count} jobs approved.")
+        logger.info("Vetting thread done: %d jobs approved", final_count)
 
     except Exception as e:
-        import traceback
-        print(f"[vetting thread] Fatal error: {e}")
-        traceback.print_exc()
+        logger.error("Vetting thread fatal error: %s", e, exc_info=True)
         _vs_set_status(user_id, "done")
 
 
@@ -1350,12 +1301,11 @@ def start_vetting_endpoint():
         )
         t.start()
 
-        print(f"[start-vetting] Thread started — user={user_id[:8]}... roles={roles}")
+        logger.info("Start-vetting thread started for user=%s, roles=%s", redact_uid(user_id), roles)
         return jsonify({"success": True, "status": "processing"}), 200
 
     except Exception as e:
-        print(f"[start-vetting] Error: {e}")
-        import traceback; traceback.print_exc()
+        logger.error("Start-vetting error: %s", e, exc_info=True)
         return jsonify({"error": str(e)}), 500
 
 
@@ -1406,7 +1356,7 @@ def vetting_results_endpoint():
         return jsonify({"jobs": jobs, "total": total, "status": status}), 200
 
     except Exception as e:
-        print(f"[vetting-results] Error: {e}")
+        logger.error("Vetting-results error: %s", e)
         return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":

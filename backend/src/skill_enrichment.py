@@ -7,6 +7,9 @@ from sklearn.metrics.pairwise import cosine_similarity
 from dotenv import load_dotenv
 from pathlib import Path
 from typing import List, Set
+from src.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 BASE_DIR = Path(__file__).resolve().parent.parent  # backend/
 load_dotenv(BASE_DIR / ".env.local")
@@ -34,9 +37,8 @@ def load_all_unique_skills() -> List[str]:
     Raises:
         FileNotFoundError: If Excel file doesn't exist
     """
-    print(f"\n==== LOADING ALL UNIQUE SKILLS ====")
-    print(f"Excel Path: {EXCEL_SKILL_GAP}")
-    print(f"Sheet Name: {SHEET_SKILL_GAP}")
+    logger.info("Loading all unique skills")
+    logger.debug("Excel path: %s, sheet: %s", EXCEL_SKILL_GAP, SHEET_SKILL_GAP)
     
     if not os.path.exists(EXCEL_SKILL_GAP):
         raise FileNotFoundError(f"Skill gap Excel file not found at: {EXCEL_SKILL_GAP}")
@@ -57,8 +59,8 @@ def load_all_unique_skills() -> List[str]:
     
     unique_skills = sorted(list(all_skills))
     
-    print(f"Total unique skills found: {len(unique_skills)}")
-    print(f"Sample skills: {unique_skills[:10]}")
+    logger.info("Total unique skills found: %d", len(unique_skills))
+    logger.debug("Sample skills: %s", unique_skills[:10])
     
     return unique_skills
 
@@ -93,16 +95,15 @@ def enrich_skills(resume_text: str, existing_skills: List[str]) -> List[str]:
     """
     global _model_cache
     
-    print(f"\n==== SKILL ENRICHMENT ====")
-    print(f"Existing skills count: {len(existing_skills)}")
-    print(f"Existing skills: {existing_skills}")
+    logger.info("Skill enrichment started")
+    logger.debug("Existing skills count: %d", len(existing_skills))
     
     # Load all unique skills from master list
     try:
         master_skills = load_all_unique_skills()
     except Exception as e:
-        print(f"Error loading master skills: {e}")
-        print("Returning existing skills without enrichment")
+        logger.error("Error loading master skills: %s", e)
+        logger.warning("Returning existing skills without enrichment")
         return existing_skills
     
     # Normalize existing skills for case-insensitive comparison
@@ -114,16 +115,16 @@ def enrich_skills(resume_text: str, existing_skills: List[str]) -> List[str]:
         if skill.lower().strip() not in existing_skills_lower
     ]
     
-    print(f"Skills to check against resume: {len(skills_to_check)}")
+    logger.debug("Skills to check against resume: %d", len(skills_to_check))
     
     if not skills_to_check:
-        print("All master skills already present in existing skills")
+        logger.debug("All master skills already present in existing skills")
         return existing_skills
     
     discovered_skills = []
     
     # PASS 1: Normalized string matching (fast)
-    print(f"\n==== PASS 1: NORMALIZED STRING MATCHING ====")
+    logger.debug("Pass 1: normalized string matching")
     resume_normalized = normalize_skill(resume_text)
     
     unmatched_skills = []
@@ -131,37 +132,36 @@ def enrich_skills(resume_text: str, existing_skills: List[str]) -> List[str]:
         skill_normalized = normalize_skill(skill)
         if skill_normalized in resume_normalized:
             discovered_skills.append(skill)
-            print(f"  ✓ String match: '{skill}' (normalized: '{skill_normalized}')")
+            logger.debug("String match: %s", skill)
         else:
             unmatched_skills.append(skill)
     
-    print(f"Pass 1 results: {len(discovered_skills)} skills found via string matching")
+    logger.debug("Pass 1 results: %d skills found via string matching", len(discovered_skills))
     
     # PASS 2: Sentence-based semantic matching (fallback for unmatched skills)
     if unmatched_skills:
-        print(f"\n==== PASS 2: SEMANTIC MATCHING (FALLBACK) ====")
-        print(f"Checking {len(unmatched_skills)} unmatched skills using semantic similarity...")
+        logger.debug("Pass 2: semantic matching fallback (%d unmatched skills)", len(unmatched_skills))
         
         # Load or use cached embedding model
         if _model_cache is None:
-            print(f"Loading embedding model: {EMBEDDING_MODEL_NAME}")
+            logger.info("Loading embedding model: %s", EMBEDDING_MODEL_NAME)
             _model_cache = SentenceTransformer(EMBEDDING_MODEL_NAME, device="cpu")
-            print("Model loaded successfully")
+            logger.info("Model loaded successfully")
         else:
-            print(f"Using cached embedding model: {EMBEDDING_MODEL_NAME}")
+            logger.debug("Using cached embedding model: %s", EMBEDDING_MODEL_NAME)
         
         model = _model_cache
         
         # Split resume into sentences for better semantic matching
         sentences = [s.strip() for s in resume_text.split('.') if s.strip()]
-        print(f"Split resume into {len(sentences)} sentences")
+        logger.debug("Split resume into %d sentences", len(sentences))
         
         # Encode sentences
-        print("Computing embeddings for resume sentences...")
+        logger.debug("Computing embeddings for resume sentences")
         sentence_embeddings = model.encode(sentences)
         
         # Encode ALL unmatched skills in one batch call (much faster than one at a time)
-        print("Computing embeddings for unmatched skills (batch)...")
+        logger.debug("Computing embeddings for unmatched skills (batch)")
         skill_embeddings = model.encode(unmatched_skills, batch_size=64, show_progress_bar=False)
         similarities_matrix = cosine_similarity(skill_embeddings, sentence_embeddings)
 
@@ -169,19 +169,16 @@ def enrich_skills(resume_text: str, existing_skills: List[str]) -> List[str]:
             max_similarity = similarities_matrix[i].max()
             if max_similarity >= SIMILARITY_THRESHOLD:
                 discovered_skills.append(skill)
-                print(f"  ✓ Semantic match: '{skill}' (similarity: {max_similarity:.3f})")
+                logger.debug("Semantic match: %s (similarity: %.3f)", skill, max_similarity)
 
         pass2_count = len(discovered_skills) - len([s for s in discovered_skills if s in skills_to_check[:len(skills_to_check) - len(unmatched_skills)]])
-        print(f"Pass 2 results: {pass2_count} additional skills found via semantic matching")
+        logger.debug("Pass 2 results: %d additional skills found via semantic matching", pass2_count)
     
-    print(f"\n==== ENRICHMENT RESULTS ====")
-    print(f"Total auto-detected skills: {len(discovered_skills)}")
-    print(f"Skills found: {discovered_skills}")
+    logger.info("Enrichment complete: %d auto-detected skills", len(discovered_skills))
     
     # Merge with existing skills
     enriched_skills = existing_skills + discovered_skills
     
-    print(f"Total skills after enrichment: {len(enriched_skills)}")
-    print("=" * 60)
+    logger.info("Total skills after enrichment: %d", len(enriched_skills))
     
     return enriched_skills

@@ -6,6 +6,10 @@ import time
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
+from src.logging_config import get_logger
+
+logger = get_logger(__name__)
+
 
 SCHEMA: Dict[str, Any] = {
     "education": [
@@ -355,12 +359,7 @@ class LlamaRefiner:
             {"role": "user", "content": build_user_prompt(resume_text)},
         ]
 
-        # Debug: print final messages being sent
-        try:
-            print("\n==== LLM MESSAGES (system + user) ====", flush=True)
-            print(json.dumps(messages, indent=2, ensure_ascii=False), flush=True)
-        except Exception:
-            pass
+        logger.info("LLM refine_resume called: backend=%s, model=%s", self.backend, self.model)
 
         if self.backend in {"lmstudio", "openai_compat"}:
             raw = self._call_openai_compatible(messages)
@@ -373,13 +372,7 @@ class LlamaRefiner:
         else:
             raise ValueError(f"Unsupported backend: {self.backend}")
 
-        # Debug: print raw model output
-        try:
-            print("\n==== LLM RAW OUTPUT ====", flush=True)
-            # Trim to avoid flooding terminal
-            print((raw[:4000] + ('... [truncated]' if len(raw) > 4000 else '')), flush=True)
-        except Exception:
-            pass
+        logger.debug("LLM response length: %d chars", len(raw))
 
         try:
             parsed = _extract_json(raw)
@@ -446,14 +439,7 @@ class LlamaRefiner:
         # Prefer JSON mode when supported (OpenAI-style)
         payload["response_format"] = {"type": "json_object"}
 
-        # Debug: print full HTTP request
-        try:
-            print("\n==== LLM HTTP (OpenAI-compatible) URL ====", flush=True)
-            print(url, flush=True)
-            print("\n==== LLM HTTP (OpenAI-compatible) Payload ====", flush=True)
-            print(json.dumps(payload, indent=2, ensure_ascii=False), flush=True)
-        except Exception:
-            pass
+        logger.debug("LLM request: model=%s, url=%s", payload.get("model"), url)
 
         max_attempts = 5
         last_resp = None
@@ -467,20 +453,20 @@ class LlamaRefiner:
                 return self._call_ollama_native(messages)
 
             if resp.status_code == 400 and "response_format" in current_payload:
-                print("[LLM] 400 with response_format — retrying without it", flush=True)
+                logger.warning("LLM 400 with response_format — retrying without it")
                 current_payload = {k: v for k, v in current_payload.items() if k != "response_format"}
                 resp = requests.post(url, headers=headers, json=current_payload, timeout=self.request_timeout_s)
                 last_resp = resp
 
             if resp.status_code == 429:
                 delay = attempt * 3  # 3s, 6s, 9s, 12s delay
-                print(f"[LLM] 429 Too Many Requests (attempt {attempt}/{max_attempts}) — retrying in {delay}s", flush=True)
+                logger.warning("LLM 429 Too Many Requests (attempt %d/%d) — retrying in %ds", attempt, max_attempts, delay)
                 if attempt < max_attempts:
                     time.sleep(delay)
                 continue
 
             if resp.status_code >= 500:
-                print(f"[LLM] {resp.status_code} server error (attempt {attempt}/{max_attempts}) — retrying in 2s", flush=True)
+                logger.error("LLM %d server error (attempt %d/%d) — retrying in 2s", resp.status_code, attempt, max_attempts)
                 if attempt < max_attempts:
                     time.sleep(2)
                 continue
@@ -519,14 +505,7 @@ class LlamaRefiner:
             },
         }
 
-        # Debug: print full HTTP request
-        try:
-            print("\n==== LLM HTTP (Ollama /api/chat) URL ====", flush=True)
-            print(url, flush=True)
-            print("\n==== LLM HTTP (Ollama /api/chat) Payload ====", flush=True)
-            print(json.dumps(payload, indent=2, ensure_ascii=False), flush=True)
-        except Exception:
-            pass
+        logger.debug("LLM request: model=%s, url=%s", payload.get("model"), url)
 
         try:
             resp = requests.post(url, json=payload, timeout=self.request_timeout_s)
@@ -536,9 +515,7 @@ class LlamaRefiner:
             error_body = ""
             try:
                 error_body = resp.text if resp else ""
-                print(f"\n==== OLLAMA ERROR ====", flush=True)
-                print(f"Status: {resp.status_code if resp else 'N/A'}", flush=True)
-                print(f"Body: {error_body}", flush=True)
+                logger.error("Ollama error: status=%s, body_length=%d", resp.status_code if resp else "N/A", len(error_body))
             except Exception:
                 pass
             
@@ -598,25 +575,14 @@ class LlamaRefiner:
             },
         }
 
-        # Debug: print full HTTP request with rendered prompt
-        try:
-            print("\n==== LLM HTTP (Ollama /api/generate) URL ====", flush=True)
-            print(url, flush=True)
-            print("\n==== LLM PROMPT (rendered) ====", flush=True)
-            print(prompt, flush=True)
-            print("\n==== LLM HTTP (Ollama /api/generate) Options ====", flush=True)
-            print(json.dumps(payload.get("options", {}), indent=2, ensure_ascii=False), flush=True)
-        except Exception:
-            pass
+        logger.debug("LLM request: model=%s, url=%s", payload.get("model"), url)
 
         try:
             resp = requests.post(url, json=payload, timeout=self.request_timeout_s)
             resp.raise_for_status()
         except Exception as e:
             body = resp.text if hasattr(resp, 'text') else ''
-            print(f"\n==== OLLAMA /api/generate ERROR ====", flush=True)
-            print(f"Error: {e}", flush=True)
-            print(f"Body: {body[:500]}", flush=True)
+            logger.error("Ollama /api/generate error: %s, body_length=%d", e, len(body))
             raise RuntimeError(f"{e} Body: {body[:500]}")
             
         data = resp.json()
@@ -703,11 +669,7 @@ def refine_projects(
     # 4000 chars covers ~10-15 projects comfortably.
     PROJECTS_CHAR_LIMIT = 4000
     if len(projects_text) > PROJECTS_CHAR_LIMIT:
-        print(
-            f"[PROJECTS LLM] Projects text truncated from {len(projects_text)} "
-            f"to {PROJECTS_CHAR_LIMIT} chars to stay within API limits.",
-            flush=True,
-        )
+        logger.warning("Projects text truncated from %d to %d chars to stay within API limits", len(projects_text), PROJECTS_CHAR_LIMIT)
         projects_text = projects_text[:PROJECTS_CHAR_LIMIT]
 
     ref = LlamaRefiner(
@@ -724,7 +686,7 @@ def refine_projects(
         {"role": "user", "content": _build_projects_user_prompt(projects_text)},
     ]
 
-    print("\n==== [PROJECTS LLM] Sending request ====", flush=True)
+    logger.info("Projects LLM request: backend=%s, model=%s", ref.backend, ref.model)
 
     if ref.backend in {"lmstudio", "openai_compat"}:
         raw = ref._call_openai_compatible(messages)
@@ -736,8 +698,7 @@ def refine_projects(
     else:
         raise ValueError(f"Unsupported backend: {ref.backend}")
 
-    print("\n==== [PROJECTS LLM] Raw output ====", flush=True)
-    print(raw[:3000] + ("... [truncated]" if len(raw) > 3000 else ""), flush=True)
+    logger.debug("Projects LLM response length: %d chars", len(raw))
 
     try:
         parsed = _extract_json(raw)

@@ -157,7 +157,7 @@ export function ResumeUpload({ onAutofill }: ResumeUploadProps) {
           stopIfAllDone();
         }
       } catch (err: any) {
-        console.error('Polling error:', err);
+        console.error('Polling error:', err instanceof Error ? err.message : 'Unknown error');
       }
     };
 

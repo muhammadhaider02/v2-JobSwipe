@@ -5,13 +5,16 @@ Uses weighted heuristics to score and rank learning resources.
 from typing import List, Dict, Any
 import re
 from utils.domain_trust import (
-    get_domain_trust_score, 
-    get_channel_trust_score, 
+    get_domain_trust_score,
+    get_channel_trust_score,
     is_blacklisted_domain,
     is_non_tech_domain,
     is_tech_relevant_domain
 )
 from utils.query_builder import QueryBuilder
+from src.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 
 class ResourceRanker:
@@ -58,12 +61,12 @@ class ResourceRanker:
         
         # NEW: Check if domain is non-tech (medical, beauty, sports, etc.)
         if is_non_tech_domain(url):
-            print(f"  ⚠️  Filtering non-tech domain: {url}")
+            logger.debug("Filtering non-tech domain: %s", url)
             return 0.0
         
         # NEW: Check if content is tech-relevant
         if not is_tech_relevant_domain(url, title, snippet):
-            print(f"  ⚠️  Filtering non-tech content: {title[:50]}...")
+            logger.debug("Filtering non-tech content: %s", title[:50])
             return 0.0
         
         # 1. Domain trust score
@@ -112,7 +115,7 @@ class ResourceRanker:
         # NEW: Check if content is tech-relevant based on title/description
         # We create a pseudo-URL for checking (YouTube is always tech-friendly platform)
         if not is_tech_relevant_domain("youtube.com", title, description):
-            print(f"  ⚠️  Filtering non-tech YouTube content: {title[:50]}...")
+            logger.debug("Filtering non-tech YouTube content: %s", title[:50])
             return 0.0
         
         # 1. Channel trust score

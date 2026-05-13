@@ -7,6 +7,9 @@ import requests
 from typing import List, Dict, Any, Optional
 from dotenv import load_dotenv
 from pathlib import Path
+from src.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 # Load environment variables
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -27,9 +30,9 @@ class YouTubeService:
         self.base_url = "https://www.googleapis.com/youtube/v3"
         
         if not self.api_key:
-            print("WARNING: YouTube API key not configured. Please set YOUTUBE_API_KEY in .env.local")
+            logger.warning("YouTube API key not configured. Please set YOUTUBE_API_KEY in .env.local")
         else:
-            print(f"YouTube API initialized successfully")
+            logger.info("YouTube API initialized successfully")
         
     def search_playlists(self, query: str, max_results: int = 10) -> List[Dict[str, Any]]:
         """
@@ -43,11 +46,11 @@ class YouTubeService:
             List of playlist data
         """
         if not self.api_key:
-            print("WARNING: YouTube API key not configured. Using mock data.")
+            logger.warning("YouTube API key not configured, using mock data")
             return self._mock_playlist_results(query, max_results)
         
         try:
-            print(f"Searching YouTube playlists for: {query}")
+            logger.debug("Searching YouTube playlists for: %s", query)
             params = {
                 "key": self.api_key,
                 "part": "snippet",
@@ -63,8 +66,7 @@ class YouTubeService:
             if response.status_code == 403:
                 error_data = response.json()
                 error_message = error_data.get('error', {}).get('message', 'Unknown error')
-                print(f"YouTube API quota exceeded or invalid key: {error_message}")
-                print("Falling back to mock data...")
+                logger.warning("YouTube API quota exceeded or invalid key: %s, falling back to mock data", error_message)
                 return self._mock_playlist_results(query, max_results)
             
             response.raise_for_status()
@@ -72,7 +74,7 @@ class YouTubeService:
             data = response.json()
             items = data.get("items", [])
             
-            print(f"Found {len(items)} playlists")
+            logger.debug("Found %d playlists", len(items))
             
             # Enrich with playlist details
             enriched_items = []
@@ -84,14 +86,13 @@ class YouTubeService:
                         item["details"] = details
                     enriched_items.append(item)
                 except Exception as e:
-                    print(f"  ⚠️  Error enriching playlist: {e}")
+                    logger.warning("Error enriching playlist: %s", e)
                     enriched_items.append(item)
             
             return enriched_items
             
         except requests.exceptions.RequestException as e:
-            print(f"YouTube API error: {e}")
-            print("Falling back to mock data...")
+            logger.error("YouTube API error: %s, falling back to mock data", e)
             return self._mock_playlist_results(query, max_results)
     
     def search_videos(self, query: str, max_results: int = 10) -> List[Dict[str, Any]]:
@@ -109,7 +110,7 @@ class YouTubeService:
             return self._mock_video_results(query, max_results)
         
         try:
-            print(f"Searching YouTube videos for: {query}")
+            logger.debug("Searching YouTube videos for: %s", query)
             params = {
                 "key": self.api_key,
                 "part": "snippet",
@@ -125,7 +126,7 @@ class YouTubeService:
             response = requests.get(f"{self.base_url}/search", params=params, timeout=15)
             
             if response.status_code == 403:
-                print(f"YouTube API quota exceeded")
+                logger.warning("YouTube API quota exceeded")
                 return self._mock_video_results(query, max_results)
             
             response.raise_for_status()
@@ -133,7 +134,7 @@ class YouTubeService:
             data = response.json()
             items = data.get("items", [])
             
-            print(f"Found {len(items)} videos")
+            logger.debug("Found %d videos", len(items))
             
             # Enrich with video statistics
             enriched_items = []
@@ -152,7 +153,7 @@ class YouTubeService:
             return enriched_items
             
         except requests.exceptions.RequestException as e:
-            print(f"YouTube API error: {e}")
+            logger.error("YouTube API error: %s", e)
             return self._mock_video_results(query, max_results)
     
     def _get_playlist_details(self, playlist_id: str) -> Optional[Dict[str, Any]]:
@@ -182,7 +183,7 @@ class YouTubeService:
             return None
             
         except Exception as e:
-            print(f"Error fetching playlist details: {e}")
+            logger.warning("Error fetching playlist details: %s", e)
             return None
     
     def _get_bulk_video_statistics(self, video_ids: List[str]) -> Dict[str, Dict[str, Any]]:
@@ -216,7 +217,7 @@ class YouTubeService:
             return stats_map
             
         except Exception as e:
-            print(f"Error fetching bulk video statistics: {e}")
+            logger.warning("Error fetching bulk video statistics: %s", e)
             return {}
     
     def _get_video_statistics(self, video_id: str) -> Optional[Dict[str, Any]]:

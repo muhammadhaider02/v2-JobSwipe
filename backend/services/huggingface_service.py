@@ -118,7 +118,7 @@ class HuggingFaceService:
             
             # Check if parsing failed
             if 'error' in result and 'raw_response' in result:
-                logger.error(f"JSON parsing failed. Raw response: {result['raw_response'][:500]}")
+                logger.error("JSON parsing failed. Response length: %d chars", len(result.get('raw_response', '')))
                 return result  # Return error immediately
             
             # Handle alternative response formats from LLM

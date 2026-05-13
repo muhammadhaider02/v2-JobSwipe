@@ -19,7 +19,6 @@ try:
     SKILL_EXTRACTOR_AVAILABLE = True
 except ImportError:
     SKILL_EXTRACTOR_AVAILABLE = False
-    print("SkillExtractor not available, will use fallback keyword extraction")
 
 from services.huggingface_service import get_huggingface_service
 

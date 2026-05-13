@@ -15,6 +15,9 @@ from dotenv import load_dotenv
 from pathlib import Path
 from typing import List, Dict, Any
 from threading import Lock
+from src.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 BASE_DIR = Path(__file__).resolve().parent.parent  # backend/
 load_dotenv(BASE_DIR / ".env.local")
@@ -62,9 +65,7 @@ def load_skill_gap_data(role_name: str) -> List[str]:
     if _excel_cache is None:
         with _excel_lock:
             if _excel_cache is None:
-                print(f"\n==== LOADING SKILL GAP DATA ====")
-                print(f"Excel Path: {EXCEL_SKILL_GAP}")
-                print(f"Sheet Name: {SHEET_SKILL_GAP}")
+                logger.info("Loading skill gap data from %s, sheet=%s", EXCEL_SKILL_GAP, SHEET_SKILL_GAP)
                 
                 if not os.path.exists(EXCEL_SKILL_GAP):
                     raise FileNotFoundError(f"Skill gap Excel file not found at: {EXCEL_SKILL_GAP}")
@@ -73,20 +74,18 @@ def load_skill_gap_data(role_name: str) -> List[str]:
                 df = pd.read_excel(EXCEL_SKILL_GAP, sheet_name=SHEET_SKILL_GAP)
                 df.columns = [c.strip() for c in df.columns]
                 
-                print(f"Total roles in Excel: {len(df)}")
-                print(f"Columns: {list(df.columns)}")
+                logger.debug("Total roles in Excel: %d, columns: %s", len(df), list(df.columns))
                 _excel_cache = df
     
     df = _excel_cache
-    print(f"Target Role: {role_name}")
+    logger.debug("Target role: %s", role_name)
     
     # Find the row matching the role (case-insensitive)
     role_row = df[df['Role'].str.strip().str.lower() == role_name.strip().lower()]
     
     if role_row.empty:
         available_roles = df['Role'].tolist()
-        print(f"Role '{role_name}' not found in Excel file.")
-        print(f"Available roles: {available_roles}")
+        logger.warning("Role '%s' not found in Excel file. Available roles: %s", role_name, available_roles)
         raise ValueError(f"Role '{role_name}' not found in skill gap data. Available roles: {available_roles}")
     
     # Extract all skills from the row (all columns except 'Role')
@@ -99,8 +98,7 @@ def load_skill_gap_data(role_name: str) -> List[str]:
         if pd.notna(skill_value) and str(skill_value).strip():
             required_skills.append(str(skill_value).strip())
     
-    print(f"Required skills found: {len(required_skills)}")
-    print(f"Skills: {required_skills}")
+    logger.debug("Required skills found: %d", len(required_skills))
     
     return required_skills
 
@@ -114,13 +112,13 @@ def get_embedding_model():
     """
     global _model_cache
     if _model_cache is not None:
-        print(f"Using cached embedding model: {EMBEDDING_MODEL_NAME}")
+        logger.debug("Using cached embedding model: %s", EMBEDDING_MODEL_NAME)
         return _model_cache
 
     # Prevent concurrent model loads
     with _model_lock:
         if _model_cache is None:
-            print(f"Loading embedding model: {EMBEDDING_MODEL_NAME}")
+            logger.info("Loading embedding model: %s", EMBEDDING_MODEL_NAME)
             _model_cache = SentenceTransformer(EMBEDDING_MODEL_NAME)
 
         return _model_cache
@@ -140,13 +138,13 @@ def compare_skills_semantic(user_skills: List[str], required_skills: List[str]) 
         - required_skills: Skills user needs to acquire
         - skill_matches: Detailed matching information with similarity scores
     """
-    print(f"\n==== COMPARING SKILLS SEMANTICALLY ====")
-    print(f"User Skills ({len(user_skills)}): {user_skills}")
-    print(f"Required Skills ({len(required_skills)}): {required_skills}")
-    print(f"Similarity Threshold: {SIMILARITY_THRESHOLD}")
+    logger.info(
+        "Comparing skills semantically: user_skills=%d, required_skills=%d, threshold=%.2f",
+        len(user_skills), len(required_skills), SIMILARITY_THRESHOLD,
+    )
     
     if not user_skills:
-        print("No user skills provided - all required skills are missing")
+        logger.debug("No user skills provided - all required skills are missing")
         return {
             "existing_skills": [],
             "required_skills": required_skills,
@@ -154,7 +152,7 @@ def compare_skills_semantic(user_skills: List[str], required_skills: List[str]) 
         }
     
     if not required_skills:
-        print("No required skills found for this role")
+        logger.debug("No required skills found for this role")
         return {
             "existing_skills": user_skills,
             "required_skills": [],
@@ -165,14 +163,14 @@ def compare_skills_semantic(user_skills: List[str], required_skills: List[str]) 
     model = get_embedding_model()
     
     # Compute embeddings
-    print("Computing embeddings for user skills...")
+    logger.debug("Computing embeddings for user skills")
     user_embeddings = model.encode(user_skills, convert_to_numpy=True)
     
-    print("Computing embeddings for required skills...")
+    logger.debug("Computing embeddings for required skills")
     required_embeddings = model.encode(required_skills, convert_to_numpy=True)
     
     # Calculate cosine similarity matrix
-    print("Calculating similarity matrix...")
+    logger.debug("Calculating similarity matrix")
     similarity_matrix = cosine_similarity(user_embeddings, required_embeddings)
     
     # Track which required skills have been matched
@@ -180,7 +178,7 @@ def compare_skills_semantic(user_skills: List[str], required_skills: List[str]) 
     existing_skills = []
     skill_matches = []
     
-    print(f"\n==== SIMILARITY ANALYSIS ====")
+    logger.debug("Similarity analysis starting")
     
     # For each user skill, find the best matching required skill
     for i, user_skill in enumerate(user_skills):
@@ -189,7 +187,7 @@ def compare_skills_semantic(user_skills: List[str], required_skills: List[str]) 
         best_similarity = similarities[best_match_idx]
         best_required_skill = required_skills[best_match_idx]
         
-        print(f"User Skill: '{user_skill}' -> Best Match: '{best_required_skill}' (Similarity: {best_similarity:.3f})")
+        logger.debug("User skill '%s' -> best match '%s' (similarity: %.3f)", user_skill, best_required_skill, best_similarity)
         
         if best_similarity >= SIMILARITY_THRESHOLD:
             existing_skills.append(user_skill)
@@ -215,9 +213,7 @@ def compare_skills_semantic(user_skills: List[str], required_skills: List[str]) 
         if i not in matched_required_indices
     ]
     
-    print(f"\n==== RESULTS ====")
-    print(f"Existing Skills ({len(existing_skills)}): {existing_skills}")
-    print(f"Missing Skills ({len(missing_skills)}): {missing_skills}")
+    logger.info("Skill comparison results: existing=%d, missing=%d", len(existing_skills), len(missing_skills))
     
     return {
         "existing_skills": existing_skills,
@@ -237,9 +233,7 @@ def analyze_skill_gap(role_name: str, user_skills: List[str]) -> Dict[str, Any]:
     Returns:
         Dictionary with skill gap analysis results
     """
-    print(f"\n{'='*60}")
-    print(f"SKILL GAP ANALYSIS")
-    print(f"{'='*60}")
+    logger.info("Starting skill gap analysis for role=%s", role_name)
     
     # Load required skills for the role
     required_skills = load_skill_gap_data(role_name)
@@ -264,9 +258,6 @@ def analyze_skill_gap(role_name: str, user_skills: List[str]) -> Dict[str, Any]:
     else:
         comparison_result["completion_percentage"] = 0.0
     
-    print(f"\n{'='*60}")
-    print(f"ANALYSIS COMPLETE")
-    print(f"Completion: {comparison_result['completion_percentage']}%")
-    print(f"{'='*60}\n")
+    logger.info("Skill gap analysis complete: completion=%.1f%%", comparison_result['completion_percentage'])
     
     return comparison_result

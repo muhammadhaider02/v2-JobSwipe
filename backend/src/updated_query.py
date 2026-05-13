@@ -6,6 +6,9 @@ from sklearn.preprocessing import normalize
 import faiss
 from dotenv import load_dotenv
 from pathlib import Path
+from src.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 BASE_DIR = Path(__file__).resolve().parent.parent  # backend/
 load_dotenv(BASE_DIR / ".env.local")
@@ -99,20 +102,14 @@ def suggest_roles(input_skills, top_k=20, top_n_choices=20):
 if __name__ == "__main__":
     input_skills = ["Python", "SQL"]
 
-    print(f"\n=== Query skills: {input_skills}")
+    logger.info("Query skills: %s", input_skills)
     result = suggest_roles(input_skills, top_k=20, top_n_choices=4)
 
-    print("\n🎯 Multiple-choice suggestions:")
-    for i, c in enumerate(result["choices"], 1):
-        print(f"  {i}. {c}")
+    logger.info("Multiple-choice suggestions: %s", result["choices"])
 
-    print("\n📊 Top candidate roles with scores:")
     for cand in result["candidates"][:6]:
-        print(f"  - {cand['role']}: score={cand['aggregated_score']:.4f}")
+        logger.info("Role: %s, score=%.4f", cand['role'], cand['aggregated_score'])
 
-    # Show suggestion message if user added <4 skills
     if "suggest_more_skills" in result:
         msg = result["suggest_more_skills"]
-        print(f"\n⚠️ {msg['message']}")
-        print(f"💡 For role '{msg['suggested_role']}', you could also add skills like:")
-        print("   ", ", ".join(msg["example_skills"]))
+        logger.info("%s Suggested skills for '%s': %s", msg['message'], msg['suggested_role'], ", ".join(msg["example_skills"]))

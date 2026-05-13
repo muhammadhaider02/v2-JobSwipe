@@ -16,6 +16,9 @@ from sentence_transformers import SentenceTransformer
 from agents.state import AgentState, VettedJob
 from services import get_supabase_service
 from langchain_core.messages import AIMessage
+from src.logging_config import get_logger, redact_uid
+
+logger = get_logger(__name__)
 
 
 # Scoring weights (must sum to 1.0)
@@ -59,7 +62,7 @@ def get_embedding_model() -> SentenceTransformer:
     """Get or initialize cached SentenceTransformer model."""
     global _model_cache
     if _model_cache is None:
-        print("Loading SentenceTransformer model (all-MiniLM-L6-v2)...")
+        logger.info("Loading SentenceTransformer model (all-MiniLM-L6-v2)...")
         _model_cache = SentenceTransformer("all-MiniLM-L6-v2")
     return _model_cache
 
@@ -78,7 +81,7 @@ def fetch_user_profile(user_id: str) -> Optional[Dict[str, Any]]:
     profile = supabase.get_user_profile(user_id)
     
     if not profile:
-        print(f"User profile not found for: {user_id}")
+        logger.warning("User profile not found for: %s", redact_uid(user_id))
         return None
     
     # Ensure required fields have defaults
@@ -145,7 +148,7 @@ def calculate_query_match(search_query: str, job_title: str) -> float:
         # Clamp to [0, 1]
         return max(0.0, min(1.0, similarity))
     except Exception as e:
-        print(f"Query match error: {e}")
+        logger.error("Query match error: %s", e)
         return 0.0
 
 
@@ -185,7 +188,7 @@ def calculate_title_similarity(user_titles: List[str], job_title: str) -> float:
         return max_similarity
     
     except Exception as e:
-        print(f"Title similarity error: {e}")
+        logger.error("Title similarity error: %s", e)
         return 0.0
 
 
@@ -242,7 +245,7 @@ def calculate_skill_match(user_skills: List[str], job_skills: List[str]) -> Tupl
         return match_score, matching_skills, missing_skills
     
     except Exception as e:
-        print(f"Skill match error: {e}")
+        logger.error("Skill match error: %s", e)
         # Fallback to exact string matching
         user_skills_normalized = {normalize_skill(s): s for s in user_skills}
         matching = []
@@ -304,7 +307,7 @@ def calculate_quiz_score(quiz_scores: List[Dict], job_skills: List[str]) -> floa
         return avg_score
     
     except Exception as e:
-        print(f"Quiz score error: {e}")
+        logger.error("Quiz score error: %s", e)
         return 0.0
 
 
@@ -405,7 +408,7 @@ def calculate_experience_alignment(user_years: int, user_latest_title: str,
             return 0.3   # 3+ bands apart
 
     except Exception as e:
-        print(f"Experience alignment error: {e}")
+        logger.error("Experience alignment error: %s", e)
         return 0.5  # Default to moderate score on error
 
 
@@ -584,9 +587,7 @@ def vetting_officer_node(state: AgentState) -> Dict[str, Any]:
     Returns:
         Updated state dictionary with vetted_jobs
     """
-    print("\n" + "="*60)
-    print("VETTING OFFICER ACTIVATED")
-    print("="*60 + "\n")
+    logger.info("Vetting Officer activated")
     
     # Extract state data
     user_id = state.get("user_id", "")
@@ -595,7 +596,7 @@ def vetting_officer_node(state: AgentState) -> Dict[str, Any]:
     
     if not user_id:
         error_msg = "No user_id provided for vetting"
-        print(f"{error_msg}")
+        logger.error("%s", error_msg)
         return {
             "vetted_jobs": [],
             "error": error_msg,
@@ -603,31 +604,31 @@ def vetting_officer_node(state: AgentState) -> Dict[str, Any]:
         }
     
     if not raw_jobs:
-        print("No jobs to vet")
+        logger.info("No jobs to vet")
         return {
             "vetted_jobs": [],
             "messages": [AIMessage(content="No jobs available for vetting.")]
         }
     
-    print(f"Vetting {len(raw_jobs)} jobs for user {user_id}...\n")
-    
+    logger.info("Vetting %d jobs for user %s", len(raw_jobs), redact_uid(user_id))
+
     # Fetch user profile
-    print("Fetching user profile...")
+    logger.debug("Fetching user profile...")
     user_profile = fetch_user_profile(user_id)
     
     if not user_profile:
         error_msg = f"User profile not found: {user_id}"
-        print(f"{error_msg}")
+        logger.error("User profile not found: %s", redact_uid(user_id))
         return {
             "vetted_jobs": [],
             "error": error_msg,
             "messages": [AIMessage(content=f"Error: {error_msg}")]
         }
     
-    print(f"   Profile loaded")
-    print(f"   Skills: {len(user_profile.get('skills', []))}")
-    print(f"   Experience: {user_profile.get('years_of_experience', 0)} years")
-    print(f"   Quiz scores: {len(user_profile.get('quiz_scores', []))}\n")
+    logger.debug("Profile loaded — skills=%d, experience=%d yrs, quiz_scores=%d",
+                 len(user_profile.get('skills', [])),
+                 user_profile.get('years_of_experience', 0),
+                 len(user_profile.get('quiz_scores', [])))
     
     # Extract user data for scoring
     user_titles = extract_user_titles(user_profile)
@@ -646,10 +647,11 @@ def vetting_officer_node(state: AgentState) -> Dict[str, Any]:
         if isinstance(latest_exp, dict):
             user_latest_title = latest_exp.get("job_title") or latest_exp.get("title", "")
     
-    print(f"Scoring jobs with 5-factor analysis...")
-    print(f"   Weights: Query={WEIGHTS['query_match']:.0%}, Exp={WEIGHTS['experience_alignment']:.0%}, "
-          f"Location={WEIGHTS['location_fit']:.0%}, Title={WEIGHTS['title_similarity']:.0%}, "
-          f"Skill={WEIGHTS['skill_match']:.0%}\n")
+    logger.info("Scoring jobs with 5-factor analysis")
+    logger.debug("Weights: Query=%.0f%%, Exp=%.0f%%, Location=%.0f%%, Title=%.0f%%, Skill=%.0f%%",
+                 WEIGHTS['query_match']*100, WEIGHTS['experience_alignment']*100,
+                 WEIGHTS['location_fit']*100, WEIGHTS['title_similarity']*100,
+                 WEIGHTS['skill_match']*100)
     
     vetted_jobs = []
     filtered_count = 0
@@ -669,7 +671,7 @@ def vetting_officer_node(state: AgentState) -> Dict[str, Any]:
             # Skip jobs with low enrichment confidence
             enrichment_confidence = job.get("enrichment_confidence", 1.0)
             if enrichment_confidence < 0.5:
-                print(f"Job {idx}: Skipped (low enrichment confidence: {enrichment_confidence:.2f})")
+                logger.debug("Job %d: skipped (low enrichment confidence: %.2f)", idx, enrichment_confidence)
                 filtered_count += 1
                 continue
             
@@ -694,7 +696,7 @@ def vetting_officer_node(state: AgentState) -> Dict[str, Any]:
             
             # Filter by threshold
             if final_score < MIN_SCORE_THRESHOLD:
-                print(f"Job {idx}: {job_title} - Filtered (score: {final_score:.2f})")
+                logger.debug("Job %d: %s — filtered (score: %.2f)", idx, job_title, final_score)
                 filtered_count += 1
                 continue
             
@@ -722,19 +724,19 @@ def vetting_officer_node(state: AgentState) -> Dict[str, Any]:
             
             vetted_jobs.append(vetted_job)
             
-            print(f"Job {idx}: {job_title} - Score: {final_score:.2f} ({confidence})")
+            logger.debug("Job %d: %s — score: %.2f (%s)", idx, job_title, final_score, confidence)
         
         # Sort by match score descending
         vetted_jobs.sort(key=lambda x: x["match_score"], reverse=True)
         
-        print(f"\nVetting Complete:")
-        print(f"   Total jobs processed: {len(raw_jobs)}")
-        print(f"   Jobs passed vetting: {len(vetted_jobs)}")
-        print(f"   Jobs filtered out: {filtered_count}")
-        
+        logger.info("Vetting complete: processed=%d, passed=%d, filtered=%d",
+                    len(raw_jobs), len(vetted_jobs), filtered_count)
+
         if vetted_jobs:
-            print(f"   Top match: {vetted_jobs[0]['job_data'].get('title')} ({vetted_jobs[0]['match_score']:.2f})")
-            print(f"   Average score: {np.mean([j['match_score'] for j in vetted_jobs]):.2f}\n")
+            logger.info("Top match: %s (%.2f), avg score: %.2f",
+                        vetted_jobs[0]['job_data'].get('title'),
+                        vetted_jobs[0]['match_score'],
+                        np.mean([j['match_score'] for j in vetted_jobs]))
         
         # Build summary message
         summary = f"""Vetted {len(raw_jobs)} jobs - {len(vetted_jobs)} qualified matches found:
@@ -755,9 +757,7 @@ Top matches sorted by relevance and ready for review."""
     
     except Exception as e:
         error_msg = f"Vetting error: {str(e)}"
-        print(f"\n{error_msg}\n")
-        import traceback
-        traceback.print_exc()
+        logger.error("%s", error_msg, exc_info=True)
         
         return {
             "vetted_jobs": [],

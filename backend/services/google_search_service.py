@@ -10,6 +10,9 @@ from typing import List, Dict, Any, Optional
 from urllib.parse import urlparse
 from dotenv import load_dotenv
 from pathlib import Path
+from src.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 # Load environment variables
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -34,9 +37,9 @@ class GoogleSearchService:
         self.timeout = 10
         
         if not self.api_key or not self.search_engine_id:
-            print("WARNING: Google API credentials not configured. Using mock data.")
+            logger.warning("Google API credentials not configured, using mock data")
         else:
-            print(f"✓ Google Custom Search API initialized successfully")
+            logger.info("Google Custom Search API initialized successfully")
         
     def search(self, query: str, num_results: int = 10) -> List[Dict[str, Any]]:
         """
@@ -50,12 +53,12 @@ class GoogleSearchService:
             List of raw search results
         """
         if not self.api_key or not self.search_engine_id:
-            print("WARNING: Google API credentials not configured. Using mock data.")
+            logger.warning("Google API credentials not configured, using mock data")
             return self._mock_search_results(query, num_results)
         
         for attempt in range(self.max_retries):
             try:
-                print(f"  🔍 Searching Google for: {query} (attempt {attempt + 1}/{self.max_retries})")
+                logger.debug("Searching Google for: %s (attempt %d/%d)", query, attempt + 1, self.max_retries)
                 params = {
                     "key": self.api_key,
                     "cx": self.search_engine_id,
@@ -68,9 +71,9 @@ class GoogleSearchService:
                 if response.status_code == 403:
                     error_data = response.json()
                     error_message = error_data.get('error', {}).get('message', 'Unknown error')
-                    print(f"Google API quota exceeded or invalid key: {error_message}")
+                    logger.warning("Google API quota exceeded or invalid key: %s", error_message)
                     if attempt == self.max_retries - 1:
-                        print("Falling back to mock data...")
+                        logger.warning("Falling back to mock data")
                         return self._mock_search_results(query, num_results)
                     continue
                 
@@ -78,20 +81,20 @@ class GoogleSearchService:
                 
                 data = response.json()
                 items = data.get("items", [])
-                print(f"Found {len(items)} results from Google")
+                logger.debug("Found %d results from Google", len(items))
                 return items
                 
             except requests.exceptions.Timeout:
-                print(f" Request timeout (attempt {attempt + 1}/{self.max_retries})")
+                logger.warning("Request timeout (attempt %d/%d)", attempt + 1, self.max_retries)
                 if attempt == self.max_retries - 1:
-                    print("  📝 Falling back to mock data...")
+                    logger.warning("Falling back to mock data")
                     return self._mock_search_results(query, num_results)
                 continue
                 
             except requests.exceptions.RequestException as e:
-                print(f"Google Search API error: {e}")
+                logger.error("Google Search API error: %s", e)
                 if attempt == self.max_retries - 1:
-                    print("  📝 Falling back to mock data...")
+                    logger.warning("Falling back to mock data")
                     return self._mock_search_results(query, num_results)
                 continue
         
@@ -143,7 +146,7 @@ class GoogleSearchService:
                 continue
                 
             except Exception as e:
-                print(f"  ❌ Async search error: {e}")
+                logger.error("Async search error: %s", e)
                 if attempt == self.max_retries - 1:
                     return self._mock_search_results(query, num_results)
                 await asyncio.sleep(1)

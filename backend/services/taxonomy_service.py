@@ -4,6 +4,9 @@ Maintains 20+ major skills with curated subskills and aliases for skill normaliz
 """
 from typing import Dict, List, Optional, Tuple
 from difflib import SequenceMatcher
+from src.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 
 class TaxonomyService:
@@ -337,7 +340,7 @@ class TaxonomyService:
     def __init__(self):
         """Initialize taxonomy service"""
         self._build_reverse_index()
-        print(f"✓ TaxonomyService initialized with {len(self.CORE_TAXONOMY)} core skills")
+        logger.info("TaxonomyService initialized with %d core skills", len(self.CORE_TAXONOMY))
     
     def _build_reverse_index(self):
         """Build reverse index for fast alias lookup"""

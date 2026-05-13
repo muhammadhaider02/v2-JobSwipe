@@ -13,6 +13,9 @@ from utils.job_analyzer import JobAnalyzer
 from services.resume_optimization_service import ResumeOptimizationService
 from services.cover_letter_service import CoverLetterService
 from services.supabase_service import get_supabase_service
+from src.logging_config import get_logger, redact_uid
+
+logger = get_logger(__name__)
 
 
 class MaterialPreparationTool:
@@ -62,20 +65,21 @@ class MaterialPreparationTool:
             }
         """
         
-        print(f"\n🔍 Analyzing job: {job_data.get('title')} at {job_data.get('company')}")
+        logger.info("Analyzing job: %s at %s", job_data.get('title'), job_data.get('company'))
         
         # Step 1: Analyze job for context
         try:
             job_analysis = self.job_analyzer.analyze_job(job_data)
             optimization_hints = self.job_analyzer.get_optimization_hints(job_analysis)
             
-            print(f"   ✓ Seniority: {job_analysis['seniority_level']}")
-            print(f"   ✓ Critical skills: {len(job_analysis['critical_skills'])} identified")
-            print(f"   ✓ Culture signals: {list(job_analysis['culture_signals'].keys())}")
+            logger.debug("Seniority: %s, critical skills: %d, culture signals: %s",
+                         job_analysis['seniority_level'],
+                         len(job_analysis['critical_skills']),
+                         list(job_analysis['culture_signals'].keys()))
             
         except Exception as e:
             error_msg = f"Job analysis failed: {str(e)}"
-            print(f"   ❌ {error_msg}")
+            logger.error("Job analysis failed: %s", e)
             return {"error": error_msg}
         
         # Step 2: Fetch user profile if not provided
@@ -91,7 +95,7 @@ class MaterialPreparationTool:
         resume_json = user_profile.get("resume_json")
         if not resume_json:
             # Create a basic resume structure from user profile data
-            print("   ⚠️  No resume_json found, creating structure from profile columns")
+            logger.warning("No resume_json found, creating structure from profile columns")
             resume_json = {
                 "personal_info": {
                     "name": user_profile.get("name", ""),
@@ -112,15 +116,15 @@ class MaterialPreparationTool:
                 "previous_roles": user_profile.get("previous_roles", [])
             }
             
-            print(f"   📊 Profile data loaded:")
-            print(f"      - Skills: {len(resume_json['skills'])} skills")
-            print(f"      - Experience: {len(resume_json['experience'])} positions")
-            print(f"      - Education: {len(resume_json['education'])} entries")
-            print(f"      - Projects: {len(resume_json['projects'])} projects")
-            print(f"      - Certifications: {len(resume_json['certifications'])} certifications")
+            logger.debug("Profile data loaded: skills=%d, experience=%d, education=%d, projects=%d, certs=%d",
+                         len(resume_json['skills']),
+                         len(resume_json['experience']),
+                         len(resume_json['education']),
+                         len(resume_json['projects']),
+                         len(resume_json['certifications']))
         
         # Step 3: Optimize resume with job-specific context
-        print(f"\n📄 Optimizing resume sections...")
+        logger.info("Optimizing resume sections")
         
         if sections_to_optimize is None:
             sections_to_optimize = ["experience", "skills", "summary"]
@@ -141,23 +145,21 @@ class MaterialPreparationTool:
             
             if not optimization_result.get("success"):
                 error_msg = optimization_result.get("error", "Resume optimization failed")
-                print(f"   ❌ {error_msg}")
+                logger.error("Resume optimization failed: %s", error_msg)
                 return {"error": error_msg}
             
             optimized_resume = optimization_result["optimized"]
             resume_metadata = optimization_result["metadata"]
             
-            print(f"   ✓ Sections optimized: {resume_metadata.get('sections_optimized', [])}")
+            logger.debug("Sections optimized: %s", resume_metadata.get('sections_optimized', []))
             
         except Exception as e:
             error_msg = f"Resume optimization error: {str(e)}"
-            print(f"   ❌ {error_msg}")
-            import traceback
-            traceback.print_exc()
+            logger.error("Resume optimization error: %s", e, exc_info=True)
             return {"error": error_msg}
         
         # Step 4: Generate cover letter
-        print(f"\n✉️  Generating cover letter...")
+        logger.info("Generating cover letter")
         
         try:
             # Select template based on seniority and culture
@@ -166,7 +168,7 @@ class MaterialPreparationTool:
                 job_analysis["culture_signals"]
             )
             
-            print(f"   ✓ Template selected: {template_name}")
+            logger.debug("Template selected: %s", template_name)
             
             # Generate cover letter using template service
             # Note: Current service uses templates; could be enhanced with LLM in future
@@ -177,22 +179,22 @@ class MaterialPreparationTool:
             )
             
             if not cover_letter:
-                print(f"   ⚠️  Cover letter generation failed, using fallback")
+                logger.warning("Cover letter generation failed, using fallback")
                 cover_letter = self._generate_fallback_cover_letter(
                     user_profile, job_data, job_analysis
                 )
             
-            print(f"   ✓ Cover letter generated ({len(cover_letter)} chars)")
+            logger.debug("Cover letter generated (%d chars)", len(cover_letter))
             
         except Exception as e:
             # Don't fail the entire workflow if cover letter fails
-            print(f"   ⚠️  Cover letter error: {str(e)}, using fallback")
+            logger.warning("Cover letter error: %s, using fallback", e)
             cover_letter = self._generate_fallback_cover_letter(
                 user_profile, job_data, job_analysis
             )
         
         # Step 5: Validate materials
-        print(f"\n✅ Validating materials...")
+        logger.info("Validating materials")
         
         validation = self._validate_materials(
             optimized_resume,
@@ -200,8 +202,10 @@ class MaterialPreparationTool:
             optimization_hints["priority_keywords"]
         )
         
-        print(f"   ✓ Keywords matched: {validation['keywords_matched']}/{validation['keywords_total']}")
-        print(f"   ✓ Overall confidence: {validation['overall_confidence']:.1%}")
+        logger.info("Keywords matched: %d/%d, confidence: %.1f%%",
+                    validation['keywords_matched'],
+                    validation['keywords_total'],
+                    validation['overall_confidence'] * 100)
         
         # Compile final result
         result = {

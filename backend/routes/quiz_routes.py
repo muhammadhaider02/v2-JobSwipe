@@ -10,6 +10,9 @@ from services.supabase_service import SupabaseService
 from typing import Dict, Any
 from datetime import datetime
 import uuid
+from src.logging_config import get_logger, redact_uid
+
+logger = get_logger(__name__)
 
 CORS_ORIGIN = os.environ.get("CORS_ALLOWED_ORIGIN", "http://localhost:3000")
 
@@ -57,11 +60,7 @@ def generate_skill_quiz(skill: str):
         num_questions = int(request.args.get('num_questions', 5))
         num_questions = min(max(num_questions, 1), 10)  # Clamp between 1-10
         
-        print(f"\n{'='*60}")
-        print(f"QUIZ GENERATION REQUEST")
-        print(f"{'='*60}")
-        print(f"Skill: {skill}")
-        print(f"Number of questions: {num_questions}")
+        logger.info("Quiz generation requested for skill=%s, num_questions=%s", skill, num_questions)
         
         # Generate quiz using hybrid service
         quiz = hybrid_service.generate_quiz(skill, num_questions=num_questions)
@@ -69,14 +68,10 @@ def generate_skill_quiz(skill: str):
         # Store quiz in memory for later evaluation
         active_quizzes[quiz.id] = quiz.to_dict()
         
-        print(f"\n✓ Quiz generated successfully")
-        print(f"  Quiz ID: {quiz.id}")
-        print(f"  Source: {quiz.source}")
-        print(f"  Questions: {len(quiz.questions)}")
-        print(f"  Total points: {quiz.total_points}")
-        if quiz.matched_skill:
-            print(f"  Matched skill: {quiz.matched_skill}")
-        print(f"{'='*60}\n")
+        logger.info(
+            "Quiz generated: id=%s, source=%s, questions=%d, points=%d, matched_skill=%s",
+            quiz.id, quiz.source, len(quiz.questions), quiz.total_points, quiz.matched_skill,
+        )
         
         return jsonify({
             "quiz": quiz.to_dict(),
@@ -84,9 +79,7 @@ def generate_skill_quiz(skill: str):
         })
         
     except Exception as e:
-        print(f"Error generating quiz for skill '{skill}': {e}")
-        import traceback
-        traceback.print_exc()
+        logger.error("Error generating quiz for skill '%s': %s", skill, e, exc_info=True)
         
         return jsonify({
             "error": str(e),
@@ -160,12 +153,7 @@ def submit_quiz():
         
         quiz_data = active_quizzes[quiz_id]
         
-        print(f"\n{'='*60}")
-        print(f"QUIZ SUBMISSION")
-        print(f"{'='*60}")
-        print(f"Quiz ID: {quiz_id}")
-        print(f"Skill: {quiz_data['skill']}")
-        print(f"Number of answers: {len(user_answers)}")
+        logger.info("Quiz submission: quiz_id=%s, skill=%s, answers=%d", quiz_id, quiz_data['skill'], len(user_answers))
         
         # Evaluate submission
         evaluation = hybrid_service.evaluate_quiz_submission(quiz_data, user_answers)
@@ -196,15 +184,16 @@ def submit_quiz():
                     quiz_score_data
                 ).execute()
                 
-                print(f"  ✓ Saved quiz score to Supabase for user {user_id}")
+                logger.info("Saved quiz score to Supabase for user %s", redact_uid(user_id))
             except Exception as e:
                 # Log error but don't fail the request
-                print(f"  ✗ Failed to save quiz score to Supabase: {e}")
+                logger.error("Failed to save quiz score to Supabase: %s", e)
         
-        print(f"\n✓ Quiz evaluated successfully")
-        print(f"  Score: {evaluation['earned_points']}/{evaluation['total_points']} ({evaluation['score_percentage']}%)")
-        print(f"  Passed: {evaluation['passed']}")
-        print(f"{'='*60}\n")
+        logger.info(
+            "Quiz evaluated: score=%s/%s (%.1f%%), passed=%s",
+            evaluation['earned_points'], evaluation['total_points'],
+            evaluation['score_percentage'], evaluation['passed'],
+        )
         
         return jsonify({
             **submission,
@@ -212,9 +201,7 @@ def submit_quiz():
         })
         
     except Exception as e:
-        print(f"Error submitting quiz: {e}")
-        import traceback
-        traceback.print_exc()
+        logger.error("Error submitting quiz: %s", e, exc_info=True)
         
         return jsonify({
             "error": str(e),

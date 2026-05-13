@@ -9,6 +9,9 @@ import json
 from typing import Dict, Optional, Any
 from openai import OpenAI, APIError, RateLimitError, APITimeoutError
 from config.settings import get_settings
+from src.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 
 class RateLimiter:
@@ -57,7 +60,7 @@ class RateLimiter:
             else:
                 # Wait until next token available
                 wait_time = (1.0 - self.tokens) / self.refill_rate
-                print(f"⏳ Rate limit reached. Waiting {wait_time:.1f}s...")
+                logger.info("Rate limit reached, waiting %.1fs", wait_time)
                 time.sleep(wait_time)
 
 
@@ -80,7 +83,7 @@ class LLMService:
             cooldown_seconds=self.settings.rate_limit_cooldown_seconds
         )
         
-        print(f"✅ LLM Service initialized: {self.settings.sambanova_model}")
+        logger.info("LLM Service initialized: %s", self.settings.sambanova_model)
     
     def generate_json(
         self,
@@ -139,35 +142,34 @@ IMPORTANT:
                 if self._validate_schema(result, schema):
                     return result
                 else:
-                    print(f"⚠️  Response doesn't match schema (attempt {attempt + 1})")
+                    logger.warning("Response doesn't match schema (attempt %d)", attempt + 1)
                     if attempt == max_retries - 1:
                         return None
                 
             except json.JSONDecodeError as e:
-                print(f"⚠️  Invalid JSON response (attempt {attempt + 1}): {e}")
+                logger.warning("Invalid JSON response (attempt %d): %s", attempt + 1, e)
                 if attempt == max_retries - 1:
                     return None
             
             except RateLimitError as e:
-                print(f"⚠️  Rate limit error (attempt {attempt + 1}): {e}")
+                logger.warning("Rate limit error (attempt %d): %s, waiting 60s", attempt + 1, e)
                 wait_time = 60  # Wait 1 minute
-                print(f"   Waiting {wait_time}s before retry...")
                 time.sleep(wait_time)
             
             except APITimeoutError as e:
-                print(f"⚠️  API timeout (attempt {attempt + 1}): {e}")
+                logger.warning("API timeout (attempt %d): %s", attempt + 1, e)
                 if attempt == max_retries - 1:
                     return None
                 time.sleep(2 ** attempt)  # Exponential backoff
             
             except APIError as e:
-                print(f"❌ API error (attempt {attempt + 1}): {e}")
+                logger.error("API error (attempt %d): %s", attempt + 1, e)
                 if attempt == max_retries - 1:
                     return None
                 time.sleep(2 ** attempt)  # Exponential backoff
             
             except Exception as e:
-                print(f"❌ Unexpected error (attempt {attempt + 1}): {e}")
+                logger.error("Unexpected error (attempt %d): %s", attempt + 1, e)
                 if attempt == max_retries - 1:
                     return None
         

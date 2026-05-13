@@ -10,6 +10,9 @@ from typing import Dict, List, Optional
 from redis import Redis
 from redis.exceptions import RedisError, ConnectionError
 from config.settings import get_settings
+from src.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 
 class RedisService:
@@ -33,13 +36,13 @@ class RedisService:
                 )
                 # Test connection
                 self.client.ping()
-                print(f"✅ Redis connected: {self.settings.redis_url}")
+                logger.info("Redis connected: %s", self.settings.redis_url)
                 return
             except (RedisError, ConnectionError) as e:
                 if attempt == self.settings.redis_max_retries - 1:
-                    print(f"❌ Redis connection failed after {self.settings.redis_max_retries} attempts: {e}")
+                    logger.error("Redis connection failed after %d attempts: %s", self.settings.redis_max_retries, e)
                     raise
-                print(f"⚠️  Redis connection attempt {attempt + 1} failed, retrying...")
+                logger.warning("Redis connection attempt %d failed, retrying...", attempt + 1)
     
     def _get_queue_key(self) -> str:
         """Get Redis key for job queue."""
@@ -76,7 +79,7 @@ class RedisService:
         try:
             return self.client.sismember(self._get_processed_key(), job_id)
         except RedisError as e:
-            print(f"⚠️  Redis error checking processed job: {e}")
+            logger.warning("Redis error checking processed job: %s", e)
             return False
     
     def enqueue_job(self, job_data: Dict) -> bool:
@@ -105,7 +108,7 @@ class RedisService:
             return True
             
         except (RedisError, json.JSONDecodeError) as e:
-            print(f"❌ Failed to enqueue job: {e}")
+            logger.error("Failed to enqueue job: %s", e)
             return False
     
     def enqueue_jobs_batch(self, jobs: List[Dict]) -> int:
@@ -141,7 +144,7 @@ class RedisService:
             return enqueued_count
             
         except (RedisError, json.JSONDecodeError) as e:
-            print(f"❌ Batch enqueue failed: {e}")
+            logger.error("Batch enqueue failed: %s", e)
             return 0
     
     def dequeue_job(self, timeout: int = 0) -> Optional[Dict]:
@@ -167,7 +170,7 @@ class RedisService:
             return None
             
         except (RedisError, json.JSONDecodeError) as e:
-            print(f"❌ Failed to dequeue job: {e}")
+            logger.error("Failed to dequeue job: %s", e)
             return None
     
     def mark_job_processed(self, job_id: str) -> bool:
@@ -187,7 +190,7 @@ class RedisService:
             self.client.expire(processed_key, self.settings.redis_processed_ttl)
             return True
         except RedisError as e:
-            print(f"❌ Failed to mark job as processed: {e}")
+            logger.error("Failed to mark job as processed: %s", e)
             return False
     
     def get_queue_length(self) -> int:
@@ -200,7 +203,7 @@ class RedisService:
         try:
             return self.client.llen(self._get_queue_key())
         except RedisError as e:
-            print(f"⚠️  Failed to get queue length: {e}")
+            logger.warning("Failed to get queue length: %s", e)
             return 0
     
     def get_processed_count(self) -> int:
@@ -213,7 +216,7 @@ class RedisService:
         try:
             return self.client.scard(self._get_processed_key())
         except RedisError as e:
-            print(f"⚠️  Failed to get processed count: {e}")
+            logger.warning("Failed to get processed count: %s", e)
             return 0
     
     def clear_queue(self) -> bool:
@@ -227,7 +230,7 @@ class RedisService:
             self.client.delete(self._get_queue_key())
             return True
         except RedisError as e:
-            print(f"❌ Failed to clear queue: {e}")
+            logger.error("Failed to clear queue: %s", e)
             return False
     
     def get_stats(self) -> Dict:
@@ -246,7 +249,7 @@ class RedisService:
         """Close Redis connection."""
         if self.client:
             self.client.close()
-            print("✅ Redis connection closed")
+            logger.info("Redis connection closed")
 
     # ==================== Vetting Stream Support ====================
 
@@ -261,7 +264,7 @@ class RedisService:
             self.client.expire(key, 3600)  # 1-hour TTL on the whole list
             return True
         except (RedisError, json.JSONDecodeError) as e:
-            print(f"❌ push_vetted_job failed: {e}")
+            logger.error("push_vetted_job failed: %s", e)
             return False
 
     def get_vetted_jobs(self, user_id: str, since: int = 0) -> list:
@@ -271,7 +274,7 @@ class RedisService:
             raw = self.client.lrange(key, since, -1)
             return [json.loads(r) for r in raw]
         except (RedisError, json.JSONDecodeError) as e:
-            print(f"❌ get_vetted_jobs failed: {e}")
+            logger.error("get_vetted_jobs failed: %s", e)
             return []
 
     def get_vetted_job_count(self, user_id: str) -> int:
@@ -288,7 +291,7 @@ class RedisService:
             self.client.sadd(key, job_id)
             self.client.expire(key, 3600)
         except RedisError as e:
-            print(f"⚠️  add_seen_job failed: {e}")
+            logger.warning("add_seen_job failed: %s", e)
 
     def is_job_seen(self, user_id: str, job_id: str) -> bool:
         """Check if a job was already processed in this session."""
@@ -303,7 +306,7 @@ class RedisService:
             key = self._vetting_key(user_id, "status")
             self.client.set(key, status, ex=3600)
         except RedisError as e:
-            print(f"⚠️  set_vetting_status failed: {e}")
+            logger.warning("set_vetting_status failed: %s", e)
 
     def get_vetting_status(self, user_id: str) -> str:
         """Return current vetting status string, or 'idle' if not set."""
@@ -320,7 +323,7 @@ class RedisService:
             key = self._vetting_key(user_id, "last_poll")
             self.client.set(key, str(time.time()), ex=120)
         except RedisError as e:
-            print(f"⚠️  update_last_poll failed: {e}")
+            logger.warning("update_last_poll failed: %s", e)
 
     def get_last_poll(self, user_id: str) -> float:
         """Return timestamp of last poll, or 0.0 if never polled."""
@@ -341,7 +344,7 @@ class RedisService:
             ]
             self.client.delete(*keys)
         except RedisError as e:
-            print(f"⚠️  clear_vetting_session failed: {e}")
+            logger.warning("clear_vetting_session failed: %s", e)
 
 
 # Global service instance

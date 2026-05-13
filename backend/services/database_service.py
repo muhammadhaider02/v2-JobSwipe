@@ -8,6 +8,9 @@ import uuid
 from typing import List, Dict, Any, Optional
 from pathlib import Path
 from models.learning_resources import LearningResource, Quiz, QuizQuestion, QuizSubmission
+from src.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 
 class DatabaseService:
@@ -138,7 +141,7 @@ class DatabaseService:
         
         conn.commit()
         conn.close()
-        print("✓ Database initialized successfully")
+        logger.info("Database initialized successfully")
     
     def _migrate_jobs_table(self, cursor):
         """Add new columns to existing jobs table if they don't exist"""
@@ -182,11 +185,11 @@ class DatabaseService:
             if column_name not in existing_columns:
                 try:
                     cursor.execute(f"ALTER TABLE jobs ADD COLUMN {column_name} {column_type}")
-                    print(f"  ✓ Added column: {column_name}")
+                    logger.debug("Added column: %s", column_name)
                 except Exception as e:
-                    print(f"  ⚠ Could not add column {column_name}: {e}")
+                    logger.warning("Could not add column %s: %s", column_name, e)
         
-        print("✓ Jobs table migration complete")
+        logger.info("Jobs table migration complete")
     
     # ==================== Learning Resources ====================
     

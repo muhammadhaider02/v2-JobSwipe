@@ -12,6 +12,9 @@ from difflib import SequenceMatcher
 from models.learning_resources import Quiz, QuizQuestion
 from services.taxonomy_service import TaxonomyService
 from services.dynamic_enrichment_service import DynamicEnrichmentService
+from src.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 
 class HybridQuizService:
@@ -34,9 +37,9 @@ class HybridQuizService:
             cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
             self.available_tables = [row[0] for row in cursor.fetchall()]
             conn.close()
-            print(f"Cached {len(self.available_tables)} tables from quiz.db")
+            logger.info("Cached %d tables from quiz.db", len(self.available_tables))
         except Exception as e:
-            print(f"Warning: Could not cache quiz.db tables: {e}")
+            logger.warning("Could not cache quiz.db tables: %s", e)
             self.available_tables = []
     
     def generate_quiz(self, skill: str, num_questions: int = 10) -> Quiz:
@@ -54,22 +57,20 @@ class HybridQuizService:
         Returns:
             Quiz object with questions
         """
-        print(f"\n{'='*60}")
-        print(f"HYBRID QUIZ GENERATION (TAXONOMY-ENHANCED) FOR: {skill}")
-        print(f"{'='*60}")
-        
-        # TIER 1: Use taxonomy to resolve skill → DB table
-        print(f"\nTIER 1: Taxonomy-based resolution")
+        logger.info("Hybrid quiz generation (taxonomy-enhanced) for skill=%s", skill)
+
+        # TIER 1: Use taxonomy to resolve skill -> DB table
+        logger.debug("TIER 1: Taxonomy-based resolution")
         db_table, canonical_skill, match_type = self.taxonomy_service.resolve_to_db_table(skill)
         
         if db_table and match_type in ["exact", "fuzzy"]:
-            print(f"Taxonomy {match_type} match: '{skill}' → '{canonical_skill}' → '{db_table}'")
+            logger.debug("Taxonomy %s match: '%s' -> '%s' -> '%s'", match_type, skill, canonical_skill, db_table)
             
             # Try to fetch from database
             db_questions = self._get_questions_from_table(db_table, num_questions)
             
             if db_questions and len(db_questions) >= num_questions:
-                print(f"TIER 1 SUCCESS: Retrieved {len(db_questions)} questions from database")
+                logger.info("TIER 1 SUCCESS: retrieved %d questions from database", len(db_questions))
                 
                 quiz_questions = self._convert_db_to_quiz_questions(db_questions)
                 
@@ -82,16 +83,16 @@ class HybridQuizService:
                     matched_skill=canonical_skill
                 )
             else:
-                print(f"Table '{db_table}' has insufficient questions")
+                logger.debug("Table '%s' has insufficient questions", db_table)
         else:
-            print(f"No taxonomy match found")
+            logger.debug("No taxonomy match found")
         
         # TIER 2: Try legacy fuzzy matching (direct table matching)
-        print(f"\nTIER 2: Legacy fuzzy database matching")
+        logger.debug("TIER 2: Legacy fuzzy database matching")
         db_questions, matched_table = self._get_questions_from_db_legacy(skill, num_questions)
         
         if db_questions and len(db_questions) >= num_questions:
-            print(f"TIER 2 SUCCESS: Retrieved {len(db_questions)} questions from '{matched_table}'")
+            logger.info("TIER 2 SUCCESS: retrieved %d questions from '%s'", len(db_questions), matched_table)
             
             quiz_questions = self._convert_db_to_quiz_questions(db_questions)
             
@@ -105,7 +106,7 @@ class HybridQuizService:
             )
         
         # TIER 3: Dynamic enrichment with taxonomy subskills
-        print(f"\nTIER 3: Dynamic enrichment with Google CSE")
+        logger.debug("TIER 3: Dynamic enrichment with Google CSE")
         
         # Use canonical skill if available for enrichment
         quiz = self.dynamic_service.generate_enriched_quiz(
@@ -114,7 +115,7 @@ class HybridQuizService:
             num_questions=num_questions
         )
         
-        print(f"TIER 3 SUCCESS: Generated {len(quiz.questions)} enriched questions")
+        logger.info("TIER 3 SUCCESS: generated %d enriched questions", len(quiz.questions))
         
         return quiz
     
@@ -167,10 +168,10 @@ class HybridQuizService:
             return questions
             
         except sqlite3.Error as e:
-            print(f"Database error: {e}")
+            logger.error("Database error: %s", e)
             return []
         except Exception as e:
-            print(f"Unexpected error: {e}")
+            logger.error("Unexpected error: %s", e)
             return []
     
     def _get_questions_from_db_legacy(self, skill: str, num_questions: int) -> Tuple[List[Dict], Optional[str]]:
@@ -192,11 +193,11 @@ class HybridQuizService:
             if not table_name:
                 table_name, similarity = self._find_fuzzy_match(skill)
                 if similarity < 0.6:
-                    print(f"Fuzzy match similarity too low: {similarity:.2f}")
+                    logger.debug("Fuzzy match similarity too low: %.2f", similarity)
                     conn.close()
                     return [], None
                 else:
-                    print(f"Legacy fuzzy match: '{skill}' → '{table_name}' (similarity: {similarity:.2f})")
+                    logger.debug("Legacy fuzzy match: '%s' -> '%s' (similarity: %.2f)", skill, table_name, similarity)
             
             if not table_name:
                 conn.close()
@@ -236,10 +237,10 @@ class HybridQuizService:
             return questions, table_name
             
         except sqlite3.Error as e:
-            print(f"  ✗ Database error: {e}")
+            logger.error("Database error: %s", e)
             return [], None
         except Exception as e:
-            print(f"  ✗ Unexpected error: {e}")
+            logger.error("Unexpected error: %s", e)
             return [], None
     
     def _find_exact_match(self, skill: str) -> Optional[str]:

@@ -11,6 +11,9 @@ from datetime import datetime
 from agents.state import AgentState
 from langchain_core.messages import AIMessage
 from config.settings import get_settings
+from src.logging_config import get_logger, redact_uid
+
+logger = get_logger(__name__)
 
 
 def campaign_manager_node(state: AgentState) -> Dict[str, Any]:
@@ -32,14 +35,12 @@ def campaign_manager_node(state: AgentState) -> Dict[str, Any]:
         Updated state with optimized_materials and messages
     """
     
-    print("\n" + "="*70)
-    print("CAMPAIGN MANAGER: Preparing Application Materials")
-    print("="*70)
+    logger.info("Campaign Manager: preparing application materials")
     
     # Validate required state fields
     if not state.get("target_job"):
         error_msg = "No target job specified. User must select a job first."
-        print(f"{error_msg}")
+        logger.error("%s", error_msg)
         return {
             "error": error_msg,
             "messages": [AIMessage(content=error_msg)]
@@ -47,7 +48,7 @@ def campaign_manager_node(state: AgentState) -> Dict[str, Any]:
     
     if not state.get("user_id"):
         error_msg = "Missing user_id in state."
-        print(f"{error_msg}")
+        logger.error("%s", error_msg)
         return {
             "error": error_msg,
             "messages": [AIMessage(content=error_msg)]
@@ -56,15 +57,17 @@ def campaign_manager_node(state: AgentState) -> Dict[str, Any]:
     target_job = state["target_job"]
     user_id = state["user_id"]
     
-    print(f"Target Job: {target_job.get('title', 'Unknown')} at {target_job.get('company', 'Unknown')}")
-    print(f"User ID: {user_id}")
-    print(f"Job Board: {target_job.get('board', 'Unknown')}")
+    logger.info("Target job: %s at %s (board=%s)",
+                target_job.get('title', 'Unknown'),
+                target_job.get('company', 'Unknown'),
+                target_job.get('board', 'Unknown'))
+    logger.debug("User: %s", redact_uid(user_id))
 
     auth_status = str(state.get("auth_status") or "").lower()
     auth_required = bool(state.get("auth_required"))
     if auth_required and auth_status != "authenticated":
         msg = "Session expired. Please log in manually in the opened browser window."
-        print(f"{msg}")
+        logger.warning("%s", msg)
         return {
             "error": msg,
             "application_status": "paused_auth",
@@ -92,7 +95,7 @@ def campaign_manager_node(state: AgentState) -> Dict[str, Any]:
         prep_tool = MaterialPreparationTool()
         
         # Prepare application materials with local scorer loop.
-        print("\nGenerating tailored application materials...")
+        logger.info("Generating tailored application materials")
         attempt = 0
         materials = None
         score_feedback = None
@@ -100,7 +103,7 @@ def campaign_manager_node(state: AgentState) -> Dict[str, Any]:
 
         while attempt <= max_retries:
             attempt += 1
-            print(f"\nCampaign tailoring attempt {attempt}/{max_retries + 1}")
+            logger.info("Campaign tailoring attempt %d/%d", attempt, max_retries + 1)
             materials = prep_tool.prepare_materials(
                 user_id=user_id,
                 job_data=target_job,
@@ -123,28 +126,26 @@ def campaign_manager_node(state: AgentState) -> Dict[str, Any]:
                 "unsupported_numeric_facts_detected": ats.get("unsupported_numeric_facts_detected", False)
             })
 
-            print(
-                f"ATS score: {current_score:.2%} "
-                f"(threshold: {threshold:.2%})"
-            )
+            logger.info("ATS score: %.2f%% (threshold: %.2f%%)",
+                        current_score * 100, threshold * 100)
 
             if current_score >= threshold:
-                print("Score threshold reached, stopping retries")
+                logger.info("Score threshold reached, stopping retries")
                 break
 
             if attempt > max_retries:
-                print("Max retries reached, proceeding with best available output")
+                logger.warning("Max retries reached, proceeding with best available output")
                 break
 
             score_feedback = {
                 "missing_keywords": ats.get("missing_keywords", []),
                 "weak_sections": ats.get("weak_sections", []),
             }
-            print("Retrying with scorer feedback")
+            logger.debug("Retrying with scorer feedback")
         
         if not materials or materials.get("error"):
             error_msg = materials.get("error", "Failed to generate materials")
-            print(f"Material preparation failed: {error_msg}")
+            logger.error("Material preparation failed: %s", error_msg)
             return {
                 "error": error_msg,
                 "messages": [AIMessage(content=f"Failed to prepare materials: {error_msg}")]
@@ -162,14 +163,16 @@ def campaign_manager_node(state: AgentState) -> Dict[str, Any]:
             "passed_threshold": bool(score_history and score_history[-1].get("score", 0.0) >= threshold)
         }
         
-        print("\nMaterials generated successfully!")
-        print(f"Resume sections optimized: {metadata.get('sections_optimized', [])}")
-        print(f"Cover letter length: {len(cover_letter)} chars")
-        print(f"Job keywords matched: {metadata.get('keywords_matched', 0)}/{metadata.get('keywords_total', 0)}")
-        print(f"Optimization confidence: {metadata.get('overall_confidence', 0):.1%}")
+        logger.info("Materials generated successfully")
+        logger.debug("Resume sections optimized: %s", metadata.get('sections_optimized', []))
+        logger.debug("Cover letter length: %d chars", len(cover_letter))
+        logger.info("Job keywords matched: %d/%d, confidence: %.1f%%",
+                     metadata.get('keywords_matched', 0),
+                     metadata.get('keywords_total', 0),
+                     metadata.get('overall_confidence', 0) * 100)
         ats_score = metadata.get("ats_simulation", {}).get("score_percent")
         if ats_score is not None:
-            print(f"ATS simulated score: {ats_score}%")
+            logger.info("ATS simulated score: %s%%", ats_score)
         
         # Store materials in state
         optimized_materials = {
@@ -189,7 +192,7 @@ def campaign_manager_node(state: AgentState) -> Dict[str, Any]:
             f"Ready for review and submission."
         )
         
-        print(f"\n{success_msg}")
+        logger.info("%s", success_msg)
         
         return {
             "optimized_materials": optimized_materials,
@@ -199,9 +202,7 @@ def campaign_manager_node(state: AgentState) -> Dict[str, Any]:
         
     except Exception as e:
         error_msg = f"Campaign Manager error: {str(e)}"
-        print(f"\n{error_msg}")
-        import traceback
-        traceback.print_exc()
+        logger.error("%s", error_msg, exc_info=True)
         
         return {
             "error": error_msg,

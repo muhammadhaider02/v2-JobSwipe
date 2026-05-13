@@ -10,6 +10,9 @@ import json
 from supabase import create_client, Client
 from postgrest.exceptions import APIError
 from config.settings import get_settings
+from src.logging_config import get_logger, redact_uid
+
+logger = get_logger(__name__)
 
 
 class SupabaseService:
@@ -28,15 +31,15 @@ class SupabaseService:
                 self.settings.supabase_url,
                 self.settings.supabase_service_role_key
             )
-            print(f"✅ Supabase connected: {self.settings.supabase_url}")
+            logger.info("Supabase connected: %s", self.settings.supabase_url)
         except Exception as e:
-            print(f"❌ Supabase connection failed: {e}")
+            logger.error("Supabase connection failed: %s", e)
             raise
 
     def reconnect(self) -> None:
         """Force a fresh Supabase connection. Call after long-running operations
         (e.g. LLM calls) to avoid stale HTTP/2 connection errors."""
-        print("🔄 Reconnecting Supabase client...")
+        logger.info("Reconnecting Supabase client")
         # Explicitly close the old httpx session so the stale HTTP/2 transport
         # is torn down before we create a fresh client.
         try:
@@ -72,7 +75,7 @@ class SupabaseService:
             return None
             
         except APIError as e:
-            print(f"❌ Failed to get user profile: {e}")
+            logger.error("Failed to get user profile: %s", e)
             return None
     
     def upsert_user_profile(self, user_id: str, profile_data: Dict) -> bool:
@@ -116,11 +119,11 @@ class SupabaseService:
                 on_conflict='user_id'
             ).execute()
             
-            print(f"✅ Saved user profile for user_id: {user_id}")
+            logger.info("Saved user profile for user %s", redact_uid(user_id))
             return True
-            
+
         except APIError as e:
-            print(f"❌ Failed to upsert user profile: {e}")
+            logger.error("Failed to upsert user profile: %s", e)
             return False
     
     # ==================== Job Operations ====================
@@ -174,11 +177,11 @@ class SupabaseService:
                 returning='minimal'
             ).execute()
             
-            print(f"✅ Inserted/updated {len(job_records)} jobs to Supabase")
+            logger.info("Inserted/updated %d jobs to Supabase", len(job_records))
             return len(job_records)
-            
+
         except APIError as e:
-            print(f"❌ Failed to bulk insert jobs: {e}")
+            logger.error("Failed to bulk insert jobs: %s", e)
             return 0
     
     def get_job_by_id(self, job_id: str) -> Optional[Dict]:
@@ -195,7 +198,7 @@ class SupabaseService:
             response = self.client.table("jobs").select("*").eq("job_id", job_id).execute()
             return response.data[0] if response.data else None
         except APIError as e:
-            print(f"❌ Failed to get job: {e}")
+            logger.error("Failed to get job: %s", e)
             return None
 
     def save_resume_version(
@@ -248,7 +251,7 @@ class SupabaseService:
                 "version": created.get("version", next_version),
             }
         except APIError as e:
-            print(f"❌ Failed to save resume version for user {user_id}: {e}")
+            logger.error("Failed to save resume version for user %s: %s", redact_uid(user_id), e)
             return None
     
     def search_jobs(
@@ -282,7 +285,7 @@ class SupabaseService:
             return response.data if response.data else []
             
         except APIError as e:
-            print(f"❌ Failed to search jobs: {e}")
+            logger.error("Failed to search jobs: %s", e)
             return []
 
     def get_jobs_for_roles(
@@ -326,7 +329,7 @@ class SupabaseService:
             return response.data if response.data else []
 
         except APIError as e:
-            print(f"❌ Failed to get_jobs_for_roles: {e}")
+            logger.error("Failed to get_jobs_for_roles: %s", e)
             return []
 
     
@@ -368,12 +371,12 @@ class SupabaseService:
             
             if response.data:
                 app_id = response.data[0]['id']
-                print(f"✅ Created application #{app_id} for job {job_id}")
+                logger.info("Created application #%s for job %s", app_id, job_id)
                 return app_id
             return None
-            
+
         except APIError as e:
-            print(f"❌ Failed to create application: {e}")
+            logger.error("Failed to create application: %s", e)
             return None
     
     def update_application_status(
@@ -403,11 +406,11 @@ class SupabaseService:
                 update_data['applied_at'] = applied_at.isoformat()
             
             self.client.table("job_applications").update(update_data).eq("id", application_id).execute()
-            print(f"✅ Updated application #{application_id} status to '{status}'")
+            logger.info("Updated application #%s status to '%s'", application_id, status)
             return True
-            
+
         except APIError as e:
-            print(f"❌ Failed to update application status: {e}")
+            logger.error("Failed to update application status: %s", e)
             return False
     
     def get_user_applications(self, user_id: str, limit: int = 50) -> List[Dict]:
@@ -432,7 +435,7 @@ class SupabaseService:
             )
             return response.data if response.data else []
         except APIError as e:
-            print(f"❌ Failed to get user applications: {e}")
+            logger.error("Failed to get user applications: %s", e)
             return []
 
     def get_application_by_id(self, application_id: int) -> Optional[Dict]:
@@ -447,7 +450,7 @@ class SupabaseService:
             )
             return response.data[0] if response.data else None
         except APIError as e:
-            print(f"❌ Failed to get application #{application_id}: {e}")
+            logger.error("Failed to get application #%s: %s", application_id, e)
             return None
 
     def save_application_materials_draft(
@@ -484,11 +487,11 @@ class SupabaseService:
                     update_data["reasoning_note"] = merged_note
 
             self.client.table("job_applications").update(update_data).eq("id", application_id).execute()
-            print(f"✅ Saved draft materials for application #{application_id}")
+            logger.info("Saved draft materials for application #%s", application_id)
             return True
 
         except APIError as e:
-            print(f"❌ Failed to save draft materials for application #{application_id}: {e}")
+            logger.error("Failed to save draft materials for application #%s: %s", application_id, e)
             return False
     
     # ==================== Error Logging ====================
@@ -520,11 +523,11 @@ class SupabaseService:
             except:
                 pass  # Table may not exist, that's okay
             
-            print(f"📝 Logged scraping error: {url[:50]}...")
+            logger.debug("Logged scraping error for url: %s", url[:50])
             return True
-            
+
         except Exception as e:
-            print(f"⚠️  Failed to log scraping error: {e}")
+            logger.warning("Failed to log scraping error: %s", e)
             return False
 
 

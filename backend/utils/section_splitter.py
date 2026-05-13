@@ -1,5 +1,8 @@
 import re
 from typing import Dict, List, Tuple
+from src.logging_config import get_logger
+
+logger = get_logger(__name__)
 
 
 SECTION_ALIASES = {
@@ -86,11 +89,11 @@ def split_resume_into_sections(text: str) -> Dict[str, str]:
 
 
 def print_sections(sections: Dict[str, str]) -> None:
-    print("\n==== Detected Sections ====")
+    logger.debug("Detected sections:")
     for name in ['Profile', 'Experience', 'Education', 'Skills', 'Projects']:
         content = sections.get(name, '') or ''
         preview = content[:200] + ("..." if len(content) > 200 else "")
-        print(f"\n{name}:\n{'-'*len(name)}\n{preview}")
+        logger.debug("%s: %s", name, preview)
 
 
 def split_experience_into_jobs(experience_text: str) -> List[str]:
