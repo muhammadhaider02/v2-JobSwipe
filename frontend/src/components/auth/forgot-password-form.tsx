@@ -3,17 +3,15 @@
 import { cn } from '@/lib/utils';
 import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { AlertCircle, MailCheck } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
+
+const spring = { type: 'spring' as const, stiffness: 100, damping: 20 };
+const stagger = (i: number) => ({ ...spring, delay: i * 0.08 });
 
 export function ForgotPasswordForm({
   className,
@@ -43,73 +41,116 @@ export function ForgotPasswordForm({
     }
   };
 
-  if (isSuccess) {
-    return (
-      <div className={cn('flex flex-col gap-6', className)} {...props}>
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-2xl">Check your email</CardTitle>
-            <CardDescription>
-              We&apos;ve sent you a password reset link
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground">
-              Please check your email and click the link to reset your password.
-            </p>
-            <div className="mt-4">
-              <Button asChild variant="outline" className="w-full">
-                <Link href="/auth/login">Back to login</Link>
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
   return (
-    <div className={cn('flex flex-col gap-6', className)} {...props}>
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-2xl">Forgot your password?</CardTitle>
-          <CardDescription>
-            Enter your email address and we&apos;ll send you a link to reset
-            your password
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form
-            onSubmit={(e) => {
-              void handleForgotPassword(e);
-            }}
+    <div className={cn('flex flex-col', className)} {...props}>
+      <AnimatePresence mode="wait">
+        {isSuccess ? (
+          <motion.div
+            key="success"
+            className="flex flex-col items-center text-center gap-4"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={spring}
           >
-            <div className="flex flex-col gap-6">
-              <div className="grid gap-2">
-                <Label htmlFor="email">Email</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="hi@example.com"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
+            <div className="w-14 h-14 rounded-2xl bg-green-500/10 flex items-center justify-center">
+              <MailCheck className="w-7 h-7 text-green-500" />
+            </div>
+            <h1 className="text-3xl font-bold tracking-tight">
+              Check your email
+            </h1>
+            <p className="text-muted-foreground text-sm max-w-xs">
+              We&apos;ve sent a password reset link to your email address.
+              Click the link to set a new password.
+            </p>
+            <Button asChild variant="outline" className="w-full mt-2">
+              <Link href="/auth/login">Back to sign in</Link>
+            </Button>
+          </motion.div>
+        ) : (
+          <motion.div
+            key="form"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0, y: -20 }}
+            transition={spring}
+          >
+            <form
+              onSubmit={(e) => {
+                void handleForgotPassword(e);
+              }}
+            >
+              <div className="flex flex-col gap-5">
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={stagger(0)}
+                >
+                  <h1 className="text-3xl font-bold tracking-tight">
+                    Reset your password
+                  </h1>
+                  <p className="text-muted-foreground mt-1 text-sm">
+                    Enter your email and we&apos;ll send you a reset link
+                  </p>
+                </motion.div>
+
+                <motion.div
+                  className="grid gap-2"
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={stagger(1)}
+                >
+                  <Label htmlFor="email">Email</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    placeholder="you@example.com"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                  />
+                </motion.div>
+
+                {error && (
+                  <div className="flex items-center gap-2 text-sm text-destructive">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    {error}
+                  </div>
+                )}
+
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={stagger(2)}
+                >
+                  <Button
+                    type="submit"
+                    className="w-full"
+                    disabled={isLoading}
+                  >
+                    {isLoading ? 'Sending...' : 'Send reset link'}
+                  </Button>
+                </motion.div>
+
+                <motion.p
+                  className="text-center text-sm text-muted-foreground"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={stagger(3)}
+                >
+                  Remember your password?{' '}
+                  <Link
+                    href="/auth/login"
+                    className="text-foreground font-medium hover:underline underline-offset-4"
+                  >
+                    Sign in
+                  </Link>
+                </motion.p>
               </div>
-              {error && <p className="text-sm text-red-500">{error}</p>}
-              <Button type="submit" className="w-full" disabled={isLoading}>
-                {isLoading ? 'Sending...' : 'Send reset link'}
-              </Button>
-            </div>
-            <div className="mt-4 text-center text-sm">
-              Remember your password?{' '}
-              <Link href="/auth/login" className="underline underline-offset-4">
-                Sign in
-              </Link>
-            </div>
-          </form>
-        </CardContent>
-      </Card>
+            </form>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
