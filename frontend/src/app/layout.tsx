@@ -4,7 +4,7 @@ import './globals.css';
 import { QueryProvider } from '@/providers/query-provider';
 import { ThemeProvider } from 'next-themes';
 import { AuthButton } from '@/components/auth/auth-button';
-import Link from 'next/link';
+import { Navbar } from '@/components/landing/navbar';
 
 const geistSans = Geist({
   variable: '--font-geist-sans',
@@ -19,7 +19,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: 'JobSwipe',
   description:
-    'Your platform to discover opportunities, grow your career and land the right job.',
+    'Apply less, land more. AI-powered job matching, resume optimization, and one-swipe applications.',
 };
 
 export default function RootLayout({
@@ -41,22 +41,13 @@ export default function RootLayout({
           <QueryProvider>
             <main className="min-h-screen flex flex-col items-center bg-background text-foreground">
               <div className="flex-1 w-full flex flex-col items-center">
-                <nav className="w-full flex border-b border-b-foreground/10 h-16 bg-background">
-                  <div className="w-full flex justify-between items-center p-3 px-6 text-sm">
-                    <div className="flex gap-5 items-center font-semibold text-lg hover:text-primary transition-colors">
-                      <Link href="/onboarding">JobSwipe</Link>
-                    </div>
-                    <AuthButton />
-                  </div>
-                </nav>
+                <Navbar>
+                  <AuthButton />
+                </Navbar>
 
                 <div className="flex-1 w-full flex flex-col">
                   {children}
                 </div>
-
-                <footer className="w-full flex items-center justify-center border-t border-t-foreground/10 mx-auto text-center text-xs py-6 bg-background">
-                  <p>Built with ❤️ by JobSwipe</p>
-                </footer>
               </div>
             </main>
           </QueryProvider>
