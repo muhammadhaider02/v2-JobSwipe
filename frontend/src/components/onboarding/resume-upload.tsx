@@ -33,6 +33,7 @@ export function ResumeUpload({ onAutofill }: ResumeUploadProps) {
   const [llmStatus, setLlmStatus] = useState<PipelineStatus>('idle');
   const [skillStatus, setSkillStatus] = useState<PipelineStatus>('idle');
   const [projectStatus, setProjectStatus] = useState<PipelineStatus>('idle');
+  const [dismissedStages, setDismissedStages] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     return () => {
@@ -177,6 +178,7 @@ export function ResumeUpload({ onAutofill }: ResumeUploadProps) {
     setLlmStatus('idle');
     setSkillStatus('idle');
     setProjectStatus('idle');
+    setDismissedStages(new Set());
 
     if (pollingIntervalRef.current) {
       clearInterval(pollingIntervalRef.current);
@@ -237,8 +239,26 @@ export function ResumeUpload({ onAutofill }: ResumeUploadProps) {
     { label: 'Education & Experience', status: llmStatus },
   ];
 
+  useEffect(() => {
+    const timers: NodeJS.Timeout[] = [];
+    for (const step of pipelineSteps) {
+      if (step.status === 'completed' && !dismissedStages.has(step.label)) {
+        const t = setTimeout(() => {
+          setDismissedStages((prev) => new Set(prev).add(step.label));
+        }, 800);
+        timers.push(t);
+      }
+    }
+    return () => timers.forEach(clearTimeout);
+  }, [skillStatus, projectStatus, llmStatus]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const visibleSteps = pipelineSteps.filter(
+    (step) => !dismissedStages.has(step.label),
+  );
+
   const showPipeline =
-    llmStatus !== 'idle' || skillStatus !== 'idle' || projectStatus !== 'idle';
+    (llmStatus !== 'idle' || skillStatus !== 'idle' || projectStatus !== 'idle') &&
+    visibleSteps.length > 0;
 
   return (
     <div className="w-full space-y-3">
@@ -329,15 +349,22 @@ export function ResumeUpload({ onAutofill }: ResumeUploadProps) {
             className="overflow-hidden"
           >
             <div className="flex flex-col gap-1.5 rounded-lg bg-muted/50 p-3">
-              {pipelineSteps.map((step) => (
-                <div
-                  key={step.label}
-                  className="flex items-center justify-between text-xs"
-                >
-                  <span className="text-muted-foreground">{step.label}</span>
-                  <PipelineStatusBadge status={step.status} />
-                </div>
-              ))}
+              <AnimatePresence initial={false}>
+                {visibleSteps.map((step) => (
+                  <motion.div
+                    key={step.label}
+                    initial={{ opacity: 1, height: 'auto' }}
+                    exit={{ opacity: 0, height: 0, marginBottom: 0 }}
+                    transition={{ type: 'spring' as const, stiffness: 100, damping: 20 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="flex items-center justify-between text-xs py-0.5">
+                      <span className="text-muted-foreground">{step.label}</span>
+                      <PipelineStatusBadge status={step.status} />
+                    </div>
+                  </motion.div>
+                ))}
+              </AnimatePresence>
             </div>
           </motion.div>
         )}
