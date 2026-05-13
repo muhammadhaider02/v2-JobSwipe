@@ -1,10 +1,18 @@
-"use client";
+'use client';
 
-import React, { useEffect, useState } from "react";
-import { ArrowLeft, Clock, Briefcase } from "lucide-react";
-import Link from "next/link";
-import { createClient } from "@/lib/supabase/client";
-import { Skeleton } from "boneyard-js/react";
+import React, { useEffect, useState } from 'react';
+import { motion } from 'motion/react';
+import {
+  ArrowLeft,
+  Clock,
+  Briefcase,
+  ExternalLink,
+  Inbox,
+} from 'lucide-react';
+import Link from 'next/link';
+import { createClient } from '@/lib/supabase/client';
+import { PageHeader } from '@/components/shared/page-header';
+import { EmptyState } from '@/components/shared/empty-state';
 
 type AppliedJob = {
   job_id: string;
@@ -17,13 +25,15 @@ type AppliedJob = {
 };
 
 function formatDate(iso: string | null): string {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
+  if (!iso) return '--';
+  return new Date(iso).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
   });
 }
+
+const spring = { type: 'spring' as const, stiffness: 100, damping: 20 };
 
 export default function JobsAppliedPage() {
   const [jobs, setJobs] = useState<AppliedJob[]>([]);
@@ -39,7 +49,7 @@ export default function JobsAppliedPage() {
         if (!user?.id) return;
 
         const res = await fetch(
-          `/api/user-applications?user_id=${user.id}`
+          `/api/user-applications?user_id=${user.id}`,
         );
         if (!res.ok) return;
         const data = await res.json();
@@ -64,21 +74,19 @@ export default function JobsAppliedPage() {
 
       <div className="flex-1 w-full pb-8 pt-0 px-4">
         <div className="max-w-6xl mx-auto mt-0 lg:mt-2">
-          {/* Header */}
-          <div className="mb-5">
-            <div className="flex items-center gap-3 mb-2">
-              <Clock className="w-8 h-8 text-primary" />
-              <h1 className="text-4xl font-bold">Applied Jobs</h1>
-            </div>
-            <p className="text-muted-foreground">
-              A record of every role you&apos;ve sent out.
-            </p>
-          </div>
+          <PageHeader
+            icon={Clock}
+            title="Applied Jobs"
+            subtitle="A record of every role you've sent out."
+          />
 
           {loading ? (
             <div className="flex flex-col gap-3 mb-5 animate-pulse">
-              {[...Array(5)].map((_, i) => (
-                <div key={i} className="bg-card border rounded-xl py-2.5 px-4 shadow-sm flex items-center gap-4">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="bg-card border rounded-xl py-2.5 px-4 shadow-sm flex items-center gap-4"
+                >
                   <div className="p-2.5 bg-muted rounded-lg hidden sm:block">
                     <div className="w-5 h-5" />
                   </div>
@@ -94,53 +102,69 @@ export default function JobsAppliedPage() {
               ))}
             </div>
           ) : jobs.length === 0 ? (
-            <div className="text-center py-16 text-muted-foreground">
-              No applications yet. Start swiping to find your next role!
-            </div>
+            <EmptyState
+              icon={Inbox}
+              title="No applications yet"
+              description="Start swiping to find your next role!"
+              action={{ label: 'Browse Jobs', href: '/select-jobs' }}
+            />
           ) : (
             <div className="flex flex-col gap-3 mb-5">
-              {jobs.map((job) => (
-                <a
+              {jobs.map((job, i) => (
+                <motion.a
                   key={job.job_id}
                   href={job.url || undefined}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className={`bg-card border rounded-xl py-2.5 px-4 shadow-sm hover:shadow-md transition-all flex items-center gap-4 hover:border-primary/50${job.url ? " cursor-pointer" : " cursor-default"}`}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ ...spring, delay: i * 0.06 }}
+                  whileHover={{ x: 4 }}
+                  className={`bg-card border rounded-xl py-2.5 px-4 shadow-sm hover:shadow-md transition-colors flex items-center gap-4 hover:border-primary/50${job.url ? ' cursor-pointer' : ' cursor-default'}`}
                 >
                   <div className="p-2.5 bg-primary/10 rounded-lg hidden sm:block flex-shrink-0">
                     <Briefcase className="w-5 h-5 text-primary" />
                   </div>
 
-                  <div className="flex-grow">
-                    <h3 className="text-lg font-semibold leading-tight">
+                  <div className="flex-grow min-w-0">
+                    <h3 className="text-lg font-semibold leading-tight truncate">
                       {job.title}
                     </h3>
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-0.5 text-sm text-muted-foreground">
                       <span>{job.company}</span>
                       {job.location && (
                         <>
-                          <span className="hidden sm:inline text-muted-foreground/40">•</span>
+                          <span className="hidden sm:inline text-muted-foreground/40">
+                            *
+                          </span>
                           <span>{job.location}</span>
                         </>
                       )}
                       {job.type && (
                         <>
-                          <span className="hidden sm:inline text-muted-foreground/40">•</span>
+                          <span className="hidden sm:inline text-muted-foreground/40">
+                            *
+                          </span>
                           <span>{job.type}</span>
                         </>
                       )}
                     </div>
                   </div>
 
-                  <div className="flex-shrink-0 text-right">
-                    <div className="text-xs text-muted-foreground mb-0.5">
-                      Applied
+                  <div className="flex-shrink-0 flex items-center gap-3">
+                    <div className="text-right">
+                      <div className="text-xs text-muted-foreground mb-0.5">
+                        Applied
+                      </div>
+                      <div className="font-semibold text-sm text-foreground">
+                        {formatDate(job.applied_at)}
+                      </div>
                     </div>
-                    <div className="font-semibold text-sm text-foreground">
-                      {formatDate(job.applied_at)}
-                    </div>
+                    {job.url && (
+                      <ExternalLink className="w-4 h-4 text-muted-foreground" />
+                    )}
                   </div>
-                </a>
+                </motion.a>
               ))}
             </div>
           )}
