@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ExternalLink, BookOpen, Youtube, Loader2, Search, Filter, ArrowLeft, ArrowRight } from "lucide-react";
+import { ExternalLink, BookOpen, Youtube, Search, Filter, ArrowLeft, ArrowRight } from "lucide-react";
 
 type GoogleResult = {
   title: string;
@@ -226,11 +226,52 @@ export default function LearningResourcesPage() {
 
   if (loading) {
     return (
-      <div className="flex-1 w-full bg-gradient-to-br from-background to-muted/20 flex items-center justify-center">
-        <div className="text-center">
-          <Loader2 className="w-12 h-12 animate-spin text-primary mx-auto mb-4" />
-          <p className="text-lg text-muted-foreground">Finding the best learning resources for you...</p>
-          <p className="text-sm text-muted-foreground mt-2">This may take a few moments</p>
+      <div className="flex-1 w-full bg-gradient-to-br from-background to-muted/20 flex flex-col">
+        <div className="flex-1 w-full pb-8 pt-0 px-4">
+          <div className="max-w-6xl mx-auto mt-0 lg:mt-2">
+            <div className="mb-8 animate-pulse">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-8 h-8 bg-muted rounded" />
+                <div className="h-9 w-60 bg-muted rounded" />
+              </div>
+              <div className="h-4 w-72 bg-muted rounded mt-2" />
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-5 gap-6 animate-pulse">
+              <div className="lg:col-span-1">
+                <Card className="p-4">
+                  <div className="h-5 w-32 bg-muted rounded mb-4" />
+                  <div className="space-y-2">
+                    {[...Array(4)].map((_, i) => (
+                      <div key={i} className="h-12 bg-muted rounded-lg" />
+                    ))}
+                  </div>
+                </Card>
+              </div>
+              <div className="lg:col-span-4 space-y-6">
+                <Card className="p-6">
+                  <div className="h-8 w-40 bg-muted rounded mb-2" />
+                </Card>
+                {[...Array(3)].map((_, i) => (
+                  <Card key={i} className="p-5">
+                    <div className="h-5 w-3/4 bg-muted rounded mb-2" />
+                    <div className="h-3 w-24 bg-muted rounded mb-2" />
+                    <div className="h-4 w-full bg-muted rounded" />
+                  </Card>
+                ))}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {[...Array(4)].map((_, i) => (
+                    <Card key={i} className="overflow-hidden">
+                      <div className="h-48 bg-muted" />
+                      <div className="p-4">
+                        <div className="h-5 w-3/4 bg-muted rounded mb-2" />
+                        <div className="h-3 w-1/2 bg-muted rounded" />
+                      </div>
+                    </Card>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     );

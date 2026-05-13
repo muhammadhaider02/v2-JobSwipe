@@ -1,9 +1,10 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { ArrowLeft, Clock, Briefcase, Loader2 } from "lucide-react";
+import { ArrowLeft, Clock, Briefcase } from "lucide-react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { Skeleton } from "boneyard-js/react";
 
 type AppliedJob = {
   job_id: string;
@@ -75,8 +76,22 @@ export default function JobsAppliedPage() {
           </div>
 
           {loading ? (
-            <div className="flex items-center justify-center py-16">
-              <Loader2 className="w-6 h-6 animate-spin text-primary" />
+            <div className="flex flex-col gap-3 mb-5 animate-pulse">
+              {[...Array(5)].map((_, i) => (
+                <div key={i} className="bg-card border rounded-xl py-2.5 px-4 shadow-sm flex items-center gap-4">
+                  <div className="p-2.5 bg-muted rounded-lg hidden sm:block">
+                    <div className="w-5 h-5" />
+                  </div>
+                  <div className="flex-grow">
+                    <div className="h-5 bg-muted rounded w-48 mb-1.5" />
+                    <div className="h-3.5 bg-muted rounded w-64" />
+                  </div>
+                  <div className="flex-shrink-0 text-right">
+                    <div className="h-3 bg-muted rounded w-12 mb-1" />
+                    <div className="h-4 bg-muted rounded w-20" />
+                  </div>
+                </div>
+              ))}
             </div>
           ) : jobs.length === 0 ? (
             <div className="text-center py-16 text-muted-foreground">

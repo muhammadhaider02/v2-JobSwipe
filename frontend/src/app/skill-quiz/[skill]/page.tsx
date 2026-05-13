@@ -356,10 +356,35 @@ export default function SkillQuizPage() {
   // ── Loading ──────────────────────────────────────────────────────────────
   if (loading) {
     return (
-      <div className="flex-1 w-full bg-gradient-to-br from-background to-muted/20 flex items-center justify-center">
-        <div className="flex flex-col items-center justify-center gap-4">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-          <p className="text-muted-foreground">Generating your quiz...</p>
+      <div className="flex-1 w-full bg-gradient-to-br from-background to-muted/20 flex flex-col">
+        <div className="flex-1 w-full pb-8 pt-0 px-4">
+          <div className="max-w-3xl mx-auto mt-0 lg:mt-2 animate-pulse">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-8 h-8 bg-muted rounded" />
+              <div className="h-8 w-48 bg-muted rounded" />
+            </div>
+            <div className="space-y-6">
+              {[...Array(4)].map((_, i) => (
+                <Card key={i}>
+                  <CardHeader>
+                    <div className="h-5 w-16 bg-muted rounded mb-2" />
+                    <div className="h-5 w-full bg-muted rounded" />
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-3">
+                      {[...Array(4)].map((_, j) => (
+                        <div key={j} className="flex items-center gap-3">
+                          <div className="w-4 h-4 bg-muted rounded-full" />
+                          <div className="h-4 bg-muted rounded flex-1" />
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+            <div className="h-10 w-32 bg-muted rounded-lg mt-6 ml-auto" />
+          </div>
         </div>
       </div>
     );

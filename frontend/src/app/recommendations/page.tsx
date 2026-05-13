@@ -2,9 +2,10 @@
 
 import React, { useEffect, useState, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
-import { Briefcase, Sparkles, ArrowLeft, Loader2, BookOpen, Check, Clock, Search } from "lucide-react";
+import { Briefcase, Sparkles, ArrowLeft, BookOpen, Check, Clock, Search } from "lucide-react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { Skeleton } from "boneyard-js/react";
 
 type Recommendation = {
   role: string;
@@ -257,17 +258,6 @@ function RecommendationsContent() {
     router.push('/learning-preferences');
   };
 
-  if (loading) {
-    return (
-      <div className="flex-1 flex items-center justify-center">
-        <div className="text-center">
-          <Loader2 className="w-12 h-12 animate-spin mx-auto mb-4 text-primary" />
-          <p className="text-lg text-muted-foreground">Finding your perfect roles...</p>
-        </div>
-      </div>
-    );
-  }
-
   if (error) {
     return (
       <div className="flex-1 flex items-center justify-center w-full">
@@ -283,7 +273,56 @@ function RecommendationsContent() {
     );
   }
 
+  const skeletonFallback = (
+    <div className="flex-1 w-full bg-gradient-to-br from-background to-muted/20 flex flex-col relative">
+      <div className="absolute top-4 left-6 z-10">
+        <div className="h-4 w-12 bg-muted rounded animate-pulse" />
+      </div>
+      <div className="flex-1 w-full pb-8 pt-0 px-4">
+        <div className="max-w-6xl mx-auto mt-0 lg:mt-2">
+          <div className="mb-5 animate-pulse">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-8 h-8 bg-muted rounded" />
+              <div className="h-9 w-72 bg-muted rounded" />
+            </div>
+            <div className="h-4 w-64 bg-muted rounded mt-2" />
+          </div>
+          <div className="mb-5 p-4 bg-card border rounded-lg animate-pulse">
+            <div className="h-5 w-24 bg-muted rounded mb-3" />
+            <div className="flex flex-wrap gap-2">
+              {[...Array(8)].map((_, i) => (
+                <div key={i} className="h-7 bg-muted rounded-full" style={{ width: `${60 + Math.random() * 40}px` }} />
+              ))}
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-4">
+            {[...Array(5)].map((_, i) => (
+              <div key={i} className="bg-card border rounded-xl p-6 shadow-sm animate-pulse">
+                <div className="flex items-start gap-3 mb-4">
+                  <div className="w-9 h-9 bg-muted rounded-lg" />
+                  <div className="flex-1">
+                    <div className="h-5 bg-muted rounded w-3/4 mb-2" />
+                  </div>
+                </div>
+                <div className="mb-3">
+                  <div className="h-1.5 bg-muted rounded-full w-full mb-3" />
+                </div>
+                <div className="flex flex-wrap gap-1.5 mb-4">
+                  {[...Array(6)].map((_, j) => (
+                    <div key={j} className="h-5 bg-muted rounded" style={{ width: `${40 + Math.random() * 40}px` }} />
+                  ))}
+                </div>
+                <div className="h-9 bg-muted rounded-lg w-full mt-4" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
   return (
+    <Skeleton name="recommendations" loading={loading} animate="pulse" fallback={skeletonFallback}>
     <div className="flex-1 w-full bg-gradient-to-br from-background to-muted/20 flex flex-col relative">
       <div className="absolute top-4 left-6 z-10">
         <Link
@@ -361,6 +400,7 @@ function RecommendationsContent() {
         </div>
       </div>
     </div>
+    </Skeleton>
   );
 }
 
@@ -368,10 +408,15 @@ export default function RecommendationsPage() {
   return (
     <Suspense
       fallback={
-        <div className="flex-1 flex items-center justify-center">
-          <div className="text-center">
-            <Loader2 className="w-12 h-12 animate-spin mx-auto mb-4 text-primary" />
-            <p className="text-lg text-muted-foreground">Loading recommendations...</p>
+        <div className="flex-1 w-full bg-gradient-to-br from-background to-muted/20 flex flex-col px-4 pb-8">
+          <div className="max-w-6xl mx-auto w-full mt-2 animate-pulse">
+            <div className="h-9 w-72 bg-muted rounded mb-2" />
+            <div className="h-4 w-48 bg-muted rounded mb-5" />
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-4">
+              {[...Array(3)].map((_, i) => (
+                <div key={i} className="bg-card border rounded-xl p-6 h-64" />
+              ))}
+            </div>
           </div>
         </div>
       }

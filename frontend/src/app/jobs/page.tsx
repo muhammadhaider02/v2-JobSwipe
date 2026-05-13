@@ -12,7 +12,6 @@ import {
   Building2,
   User,
   CheckCircle2,
-  Loader2,
 } from "lucide-react";
 
 const POLL_INTERVAL_MS = 2000;
@@ -286,9 +285,31 @@ function JobCard({ job, animating }: JobCardProps) {
 
 function LoadingCard() {
   return (
-    <div className="w-full max-w-6xl bg-card border border-border rounded-2xl shadow-xl p-12 flex flex-col items-center justify-center gap-4 min-h-[340px]">
-      <Loader2 className="w-10 h-10 text-primary animate-spin" />
-      <p className="text-muted-foreground font-medium">Finding matching jobs…</p>
+    <div className="w-full max-w-6xl bg-card border border-border rounded-2xl shadow-xl p-8 min-h-[340px] animate-pulse">
+      <div className="flex items-start gap-4 mb-6">
+        <div className="w-12 h-12 bg-muted rounded-lg" />
+        <div className="flex-1">
+          <div className="h-6 w-3/4 bg-muted rounded mb-2" />
+          <div className="h-4 w-1/2 bg-muted rounded mb-1" />
+          <div className="flex gap-2 mt-2">
+            <div className="h-5 w-20 bg-muted rounded-full" />
+            <div className="h-5 w-24 bg-muted rounded-full" />
+            <div className="h-5 w-16 bg-muted rounded-full" />
+          </div>
+        </div>
+        <div className="w-16 h-16 bg-muted rounded-full" />
+      </div>
+      <div className="space-y-2 mb-6">
+        <div className="h-3.5 bg-muted rounded w-full" />
+        <div className="h-3.5 bg-muted rounded w-full" />
+        <div className="h-3.5 bg-muted rounded w-5/6" />
+        <div className="h-3.5 bg-muted rounded w-4/6" />
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        {[...Array(8)].map((_, i) => (
+          <div key={i} className="h-6 bg-muted rounded-full" style={{ width: `${50 + Math.random() * 40}px` }} />
+        ))}
+      </div>
     </div>
   );
 }

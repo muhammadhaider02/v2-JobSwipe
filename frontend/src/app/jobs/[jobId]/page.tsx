@@ -431,10 +431,28 @@ export default function JobApplicationMaterialsPage() {
 
   if (loading) {
     return (
-      <div className="flex-1 w-full bg-gradient-to-br from-background to-muted/20 flex flex-col relative items-center justify-center min-h-[50vh]">
-        <Loader2 className="w-6 h-6 animate-spin text-primary mb-3" />
-        <div className="text-sm text-muted-foreground transition-all duration-500">
-          {LOADING_STEPS[loadingStep]}
+      <div className="flex-1 w-full bg-gradient-to-br from-background to-muted/20 flex flex-col relative">
+        <div className="flex-1 w-full pb-8 pt-12 px-4">
+          <div className="max-w-5xl mx-auto animate-pulse">
+            <div className="h-8 w-56 bg-muted rounded mb-6" />
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="bg-card border rounded-xl p-6">
+                <div className="h-6 w-40 bg-muted rounded mb-4" />
+                <div className="h-[260px] bg-muted rounded" />
+                <div className="flex gap-2 mt-4">
+                  <div className="h-9 w-32 bg-muted rounded-lg" />
+                  <div className="h-9 w-28 bg-muted rounded-lg" />
+                </div>
+              </div>
+              <div className="bg-card border rounded-xl p-6">
+                <div className="h-6 w-44 bg-muted rounded mb-4" />
+                <div className="h-9 w-full bg-muted rounded mb-4" />
+                <div className="h-[220px] bg-muted rounded" />
+                <div className="h-9 w-28 bg-muted rounded-lg mt-4" />
+              </div>
+            </div>
+            <div className="h-10 w-full bg-muted rounded-lg mt-6" />
+          </div>
         </div>
       </div>
     );
