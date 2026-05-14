@@ -6,6 +6,7 @@ from flask_cors import cross_origin
 from services.cover_letter_service import CoverLetterService
 import logging
 import os
+from src.logging_config import redact_uid
 
 logger = logging.getLogger(__name__)
 
@@ -83,7 +84,7 @@ def generate_cover_letter():
         job_id = data.get('job_id')
         template_name = data.get('template_name')
         
-        logger.info(f"Generate cover letter request - user_id: {user_id}, job_id: {job_id}, template: {template_name}")
+        logger.info("Generate cover letter request - user=%s, job=%s, template=%s", redact_uid(user_id), job_id, template_name)
         
         if not user_id or not job_id or not template_name:
             error_msg = "user_id, job_id and template_name are required"

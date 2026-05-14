@@ -143,7 +143,7 @@ def calculate_query_match(search_query: str, job_title: str) -> float:
         return 0.0
     try:
         model = get_embedding_model()
-        embeddings = model.encode([search_query, job_title], normalize_embeddings=True)
+        embeddings = model.encode([search_query, job_title], normalize_embeddings=True, show_progress_bar=False)
         similarity = float(embeddings[0] @ embeddings[1])
         # Clamp to [0, 1]
         return max(0.0, min(1.0, similarity))
@@ -174,7 +174,7 @@ def calculate_title_similarity(user_titles: List[str], job_title: str) -> float:
         
         # Batch encode all titles at once (efficient)
         all_titles = user_titles + [job_title]
-        embeddings = model.encode(all_titles, normalize_embeddings=True)
+        embeddings = model.encode(all_titles, normalize_embeddings=True, show_progress_bar=False)
         
         # User embeddings vs job embedding
         user_embeddings = embeddings[:-1]
@@ -221,8 +221,8 @@ def calculate_skill_match(user_skills: List[str], job_skills: List[str]) -> Tupl
         model = get_embedding_model()
         
         # Encode all skills
-        user_embeddings = model.encode(user_skills, normalize_embeddings=True)
-        job_embeddings = model.encode(job_skills, normalize_embeddings=True)
+        user_embeddings = model.encode(user_skills, normalize_embeddings=True, show_progress_bar=False)
+        job_embeddings = model.encode(job_skills, normalize_embeddings=True, show_progress_bar=False)
         
         # Calculate similarity matrix (user_skills x job_skills)
         similarity_matrix = user_embeddings @ job_embeddings.T

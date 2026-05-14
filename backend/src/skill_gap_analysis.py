@@ -164,10 +164,10 @@ def compare_skills_semantic(user_skills: List[str], required_skills: List[str]) 
     
     # Compute embeddings
     logger.debug("Computing embeddings for user skills")
-    user_embeddings = model.encode(user_skills, convert_to_numpy=True)
+    user_embeddings = model.encode(user_skills, convert_to_numpy=True, show_progress_bar=False)
     
     logger.debug("Computing embeddings for required skills")
-    required_embeddings = model.encode(required_skills, convert_to_numpy=True)
+    required_embeddings = model.encode(required_skills, convert_to_numpy=True, show_progress_bar=False)
     
     # Calculate cosine similarity matrix
     logger.debug("Calculating similarity matrix")

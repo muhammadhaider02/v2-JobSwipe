@@ -71,9 +71,16 @@ app.register_blueprint(quiz_bp)
 app.register_blueprint(resume_pdf_bp)
 
 
+_UUID_RE = re.compile(r'[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', re.IGNORECASE)
+
+
+def _redact_path(path: str) -> str:
+    return _UUID_RE.sub(lambda m: m.group()[:8] + "...", path)
+
+
 @app.after_request
 def log_request(response):
-    logger.info("%s %s %s", request.method, request.path, response.status_code)
+    logger.info("%s %s %s", request.method, _redact_path(request.path), response.status_code)
     return response
 
 

@@ -39,7 +39,7 @@ def load_index_and_metadata(idx_path, meta_path):
 
 def query_index(index, metadata, query, top_k=10):
     model = SentenceTransformer(EMBEDDING_MODEL_NAME)
-    q_emb = model.encode([query], convert_to_numpy=True)
+    q_emb = model.encode([query], convert_to_numpy=True, show_progress_bar=False)
     q_emb = normalize(q_emb, norm="l2", axis=1).astype(np.float32)
     D, I = index.search(q_emb, top_k)
     results = []

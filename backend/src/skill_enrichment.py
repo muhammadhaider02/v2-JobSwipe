@@ -158,7 +158,7 @@ def enrich_skills(resume_text: str, existing_skills: List[str]) -> List[str]:
         
         # Encode sentences
         logger.debug("Computing embeddings for resume sentences")
-        sentence_embeddings = model.encode(sentences)
+        sentence_embeddings = model.encode(sentences, show_progress_bar=False)
         
         # Encode ALL unmatched skills in one batch call (much faster than one at a time)
         logger.debug("Computing embeddings for unmatched skills (batch)")

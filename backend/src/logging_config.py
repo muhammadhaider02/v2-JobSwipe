@@ -25,6 +25,9 @@ def setup_logging():
     logging.getLogger("urllib3").setLevel(logging.WARNING)
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("httpcore").setLevel(logging.WARNING)
+    logging.getLogger("sentence_transformers").setLevel(logging.WARNING)
+
+    os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 
 
 setup_logging()

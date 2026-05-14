@@ -103,7 +103,7 @@ class ResumeOptimizationService:
         for model_name in candidates:
             try:
                 self.model = SentenceTransformer(model_name, device="cpu")
-                logger.info(f"✅ SentenceTransformer model loaded successfully: {model_name}")
+                logger.info("SentenceTransformer model loaded: %s", model_name)
                 return
             except Exception as exc:
                 logger.warning(f"Model load failed for {model_name}: {exc}")
@@ -286,7 +286,7 @@ class ResumeOptimizationService:
                 return rules
 
             # Embed the query
-            query_embedding = self.model.encode([query], convert_to_numpy=True)
+            query_embedding = self.model.encode([query], convert_to_numpy=True, show_progress_bar=False)
             faiss.normalize_L2(query_embedding)
 
             # Search in full index, then filter results
@@ -385,10 +385,7 @@ class ResumeOptimizationService:
         # Step 4: Optimize each section
         if "experience" in sections_to_optimize:
             original_experience = resume_json.get('experience', [])
-            logger.info(f"\n{'='*60}")
-            logger.info(f"OPTIMIZING EXPERIENCE SECTION")
-            logger.info(f"{'='*60}")
-            logger.info(f"Original experience entries: {len(original_experience)}")
+            logger.info("Optimizing section: experience (%d entries)", len(original_experience))
             
             exp_result = self._optimize_experience_section(
                 original_experience,
@@ -400,29 +397,18 @@ class ResumeOptimizationService:
             
             # Log RAG rules used
             rules_used = exp_result.get('rules_used', [])
-            logger.info(f"\n📚 RAG Rules Retrieved ({len(rules_used)} rules):")
-            for i, rule in enumerate(rules_used[:3], 1):
-                if isinstance(rule, dict):
-                    rule_text = rule.get('content') or rule.get('chunk_text') or str(rule)
-                else:
-                    rule_text = str(rule)
-                logger.info(f"  Rule {i}: {rule_text[:100]}...")
-            
-            # Log LLM response
+            logger.debug("RAG rules retrieved: %d", len(rules_used))
+
             llm_response = exp_result.get('llm_response', {})
             optimized_exp = exp_result.get('optimized_experience', [])
-            logger.info(f"\n🤖 LLM Output:")
-            logger.info(f"  Optimized experience entries: {len(optimized_exp)}")
-            if optimized_exp:
-                logger.info(f"  First entry highlights: {optimized_exp[0].get('highlights', [])[:2] if optimized_exp[0] else []}")
-            logger.info(f"  LLM validation: {llm_response.get('validation', {})}")
+            logger.debug("LLM output: %d experience entries", len(optimized_exp))
             if 'error' in llm_response:
                 logger.error(f"  LLM error: {llm_response['error']}")
             
             # Check for errors or validation failures
             if 'error' in exp_result:
                 # LLM response error - keep original
-                logger.warning(f"❌ Experience optimization failed: {exp_result.get('error')} - keeping original")
+                logger.warning("Experience optimization failed: %s - keeping original", exp_result.get('error'))
                 result['optimized']['experience'] = original_experience
                 exp_result['optimized_experience'] = original_experience
             else:
@@ -431,22 +417,18 @@ class ResumeOptimizationService:
                 
                 # Allow experience optimization even with warnings, but log them
                 if not validation.get('passed', True):
-                    logger.warning(f"⚠️  Experience validation warnings: {validation.get('warnings', [])}")
+                    logger.warning("Experience validation warnings: %s", validation.get('warnings', []))
                 else:
-                    logger.info(f"✅ Experience optimization validated")
+                    logger.info("Experience optimization validated")
                 
                 result['optimized']['experience'] = optimized_exp
             
-            logger.info(f"\n✨ Final experience entries: {len(result['optimized']['experience'])}")
+            logger.debug("Final experience entries: %d", len(result['optimized']['experience']))
             result['metadata']['optimization_details']['experience'] = exp_result
         
         if "skills" in sections_to_optimize:
             original_skills = resume_json.get('skills', [])
-            logger.info(f"\n{'='*60}")
-            logger.info(f"OPTIMIZING SKILLS SECTION")
-            logger.info(f"{'='*60}")
-            logger.info(f"Original skills ({len(original_skills)}): {original_skills}")
-            logger.info(f"Job keywords ({len(jd_keywords)}): {jd_keywords}")
+            logger.info("Optimizing section: skills (%d skills, %d keywords)", len(original_skills), len(jd_keywords))
             
             skills_result = self._optimize_skills_section(
                 original_skills,
@@ -457,20 +439,11 @@ class ResumeOptimizationService:
             
             # Log RAG rules used
             rules_used = skills_result.get('rules_used', [])
-            logger.info(f"\n📚 RAG Rules Retrieved ({len(rules_used)} rules):")
-            for i, rule in enumerate(rules_used[:3], 1):
-                if isinstance(rule, dict):
-                    rule_text = rule.get('content') or rule.get('chunk_text') or str(rule)
-                else:
-                    rule_text = str(rule)
-                logger.info(f"  Rule {i}: {rule_text[:100]}...")
-            
-            # Log LLM response
+            logger.debug("RAG rules retrieved: %d", len(rules_used))
+
             llm_response = skills_result.get('llm_response', {})
             optimized_skills = skills_result.get('optimized_skills', [])
-            logger.info(f"\n🤖 LLM Output:")
-            logger.info(f"  Optimized skills ({len(optimized_skills)}): {optimized_skills}")
-            logger.info(f"  LLM validation: {llm_response.get('validation', {})}")
+            logger.debug("LLM output: %d optimized skills", len(optimized_skills))
             if 'error' in llm_response:
                 logger.error(f"  LLM error: {llm_response['error']}")
             
@@ -488,41 +461,38 @@ class ResumeOptimizationService:
             # 2. Original skills was empty (allow populating from job requirements)
             # 3. New skills are from job requirements (in jd_keywords)
             if llm_response.get('error'):
-                logger.warning(f"❌ LLM error detected - reverting to original skills")
+                logger.warning("LLM error detected - reverting to original skills")
                 result['optimized']['skills'] = original_skills
                 skills_result['optimized_skills'] = original_skills
             elif len(original_skills) == 0:
-                logger.warning("❌ Original skills are empty - strict mode prevents adding unverified skills")
+                logger.warning("Original skills are empty - strict mode prevents adding unverified skills")
                 result['optimized']['skills'] = original_skills
                 skills_result['optimized_skills'] = original_skills
                 if 'llm_response' in skills_result:
                     skills_result['llm_response']['reverted_to_original'] = True
                     skills_result['llm_response']['reason'] = 'Strict user-data-only mode: cannot add new skills when source skills are empty'
             elif validation.get('no_new_skills_added', True):
-                logger.info(f"✅ Skills optimization validated - no hallucinations")
+                logger.info("Skills optimization validated - no hallucinations")
                 result['optimized']['skills'] = optimized_skills
             elif new_skills_added and all(skill in jd_keywords for skill in new_skills_added):
                 # New skills are from job requirements
-                logger.info(f"✅ New skills are from job requirements: {new_skills_added}")
+                logger.info("New skills from job requirements: %s", new_skills_added)
                 result['optimized']['skills'] = optimized_skills
             else:
                 # Validation failed - hallucinated skills
-                logger.warning(f"❌ Skills validation failed - hallucinated skills detected: {new_skills_added}")
+                logger.warning("Skills validation failed - hallucinated skills: %s", new_skills_added)
                 result['optimized']['skills'] = original_skills
                 skills_result['optimized_skills'] = original_skills
                 if 'llm_response' in skills_result:
                     skills_result['llm_response']['reverted_to_original'] = True
                     skills_result['llm_response']['reason'] = f'Hallucinated skills: {new_skills_added}'
             
-            logger.info(f"\n✨ Final skills ({len(result['optimized']['skills'])}): {result['optimized']['skills']}")
+            logger.debug("Final skills count: %d", len(result['optimized']['skills']))
             result['metadata']['optimization_details']['skills'] = skills_result
         
         if "summary" in sections_to_optimize:
             original_summary = resume_json.get('summary', '')
-            logger.info(f"\n{'='*60}")
-            logger.info(f"OPTIMIZING SUMMARY SECTION")
-            logger.info(f"{'='*60}")
-            logger.info(f"Original summary: {original_summary[:200]}...")
+            logger.info("Optimizing section: summary (%d chars)", len(original_summary))
             
             summary_result = self._optimize_summary_section(
                 original_summary,
@@ -535,20 +505,10 @@ class ResumeOptimizationService:
             
             # Log RAG rules used
             rules_used = summary_result.get('rules_used', [])
-            logger.info(f"\n📚 RAG Rules Retrieved ({len(rules_used)} rules):")
-            for i, rule in enumerate(rules_used[:3], 1):
-                if isinstance(rule, dict):
-                    rule_text = rule.get('content') or rule.get('chunk_text') or str(rule)
-                else:
-                    rule_text = str(rule)
-                logger.info(f"  Rule {i}: {rule_text[:100]}...")
-            
-            # Log LLM response
+            logger.debug("RAG rules retrieved: %d", len(rules_used))
+
             llm_response = summary_result.get('llm_response', {})
             optimized_summary = summary_result.get('optimized_summary', '')
-            logger.info(f"\n🤖 LLM Output:")
-            logger.info(f"  Optimized summary: {optimized_summary[:200]}...")
-            logger.info(f"  LLM validation: {llm_response.get('validation', {})}")
             if 'error' in llm_response:
                 logger.error(f"  LLM error: {llm_response['error']}")
             
@@ -556,11 +516,11 @@ class ResumeOptimizationService:
             validation = llm_response.get('validation', {})
             
             if validation.get('passed', True) and not llm_response.get('error'):
-                logger.info(f"✅ Summary optimization validated")
+                logger.info("Summary optimization validated")
                 result['optimized']['summary'] = optimized_summary
             else:
                 # Validation failed - keep original summary
-                logger.warning(f"❌ Summary validation failed - reverting to original: {validation.get('warnings', [])}")
+                logger.warning("Summary validation failed - reverting to original: %s", validation.get('warnings', []))
                 result['optimized']['summary'] = original_summary
                 
                 # Update metadata to reflect revert
@@ -569,7 +529,7 @@ class ResumeOptimizationService:
                     summary_result['llm_response']['reverted_to_original'] = True
                     summary_result['llm_response']['reason'] = validation.get('warnings', ['Validation failed or LLM error'])[0]
             
-            logger.info(f"\n✨ Final summary: {result['optimized']['summary'][:200]}...")
+            logger.debug("Final summary length: %d chars", len(result['optimized']['summary']))
             result['metadata']['optimization_details']['summary'] = summary_result
         
         ats_simulation = self._simulate_ats_score(
@@ -697,7 +657,7 @@ class ResumeOptimizationService:
         if self.model is None:
             return 0.0
         try:
-            embeddings = self.model.encode([optimized_text, job_description], normalize_embeddings=True)
+            embeddings = self.model.encode([optimized_text, job_description], normalize_embeddings=True, show_progress_bar=False)
             similarity = float(np.dot(embeddings[0], embeddings[1]))
             return max(0.0, min(1.0, similarity))
         except Exception as exc:
