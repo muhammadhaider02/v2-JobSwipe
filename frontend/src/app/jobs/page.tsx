@@ -370,6 +370,8 @@ export default function JobsPage() {
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const animRef = useRef(false);
   const appliedIdsRef = useRef<Set<string>>(new Set());
+  const emptyPollCountRef = useRef(0);
+  const isRestoredRef = useRef(false);
 
   useEffect(() => {
     indexRef.current = currentIndex;
@@ -431,11 +433,43 @@ export default function JobsPage() {
 
       if (data.jobs?.length) {
         sinceRef.current = data.total;
+        emptyPollCountRef.current = 0;
         const newJobs = data.jobs.filter(
           (j: VettedJob) => !appliedIdsRef.current.has(j.job_id),
         );
         if (newJobs.length) {
           setCards((prev) => [...prev, ...newJobs]);
+        }
+      } else if (isRestoredRef.current) {
+        emptyPollCountRef.current += 1;
+        if (emptyPollCountRef.current >= 5) {
+          isRestoredRef.current = false;
+          emptyPollCountRef.current = 0;
+          stopPolling();
+          clearSession();
+          setCards([]);
+          setCurrentIndex(0);
+          sinceRef.current = 0;
+          indexRef.current = 0;
+          cardsRef.current = [];
+
+          const raw = sessionStorage.getItem('selectedRoles');
+          let roles: string[] = [];
+          try { if (raw) roles = JSON.parse(raw); } catch { /* ignore */ }
+          if (roles.length) {
+            fetch('/api/jobs/start-vetting', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ user_id: uid, roles }),
+            }).then((r) => {
+              if (r.ok) {
+                setStatus('processing');
+                statusRef.current = 'processing';
+                startPolling(uid);
+              }
+            });
+          }
+          return;
         }
       }
 
@@ -486,6 +520,8 @@ export default function JobsPage() {
       statusRef.current = st;
 
       if (st === 'processing') {
+        isRestoredRef.current = true;
+        emptyPollCountRef.current = 0;
         startPolling(userId);
       }
     } else {
