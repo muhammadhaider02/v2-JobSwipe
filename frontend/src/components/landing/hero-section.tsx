@@ -132,13 +132,13 @@ export function HeroSection() {
         >
           <Link
             href="/auth/sign-up"
-            className="relative inline-flex items-center justify-center rounded-xl text-base font-semibold bg-primary text-primary-foreground hover:bg-primary/90 h-12 px-8 transition-all shimmer glow-primary hover:scale-105"
+            className="relative inline-flex items-center justify-center rounded-xl text-base font-semibold bg-primary text-primary-foreground hover:bg-primary/90 h-12 px-8 transition-all shimmer glow-primary hover:scale-105 w-full sm:w-auto"
           >
             Get Started Free
           </Link>
           <a
             href="#how-it-works"
-            className="inline-flex items-center justify-center rounded-xl text-base font-semibold border border-border bg-background/50 hover:bg-accent hover:text-accent-foreground h-12 px-8 transition-all backdrop-blur-sm hover:scale-105"
+            className="inline-flex items-center justify-center rounded-xl text-base font-semibold border border-border bg-background/50 hover:bg-accent hover:text-accent-foreground h-12 px-8 transition-all backdrop-blur-sm hover:scale-105 w-full sm:w-auto"
           >
             See How It Works
           </a>

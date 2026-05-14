@@ -56,14 +56,14 @@ export function CTASection() {
         >
           <Link
             href="/auth/sign-up"
-            className="relative inline-flex items-center gap-2 rounded-xl text-base font-semibold bg-primary text-primary-foreground hover:bg-primary/90 h-12 px-8 transition-all shimmer glow-primary hover:scale-105"
+            className="relative inline-flex items-center justify-center gap-2 rounded-xl text-base font-semibold bg-primary text-primary-foreground hover:bg-primary/90 h-12 px-8 transition-all shimmer glow-primary hover:scale-105 w-full sm:w-auto"
           >
             Get Started Free
             <ArrowRight className="w-4 h-4" />
           </Link>
           <Link
             href="/auth/login"
-            className="inline-flex items-center justify-center rounded-xl text-base font-semibold border border-border hover:bg-accent hover:text-accent-foreground h-12 px-8 transition-all hover:scale-105"
+            className="inline-flex items-center justify-center rounded-xl text-base font-semibold border border-border hover:bg-accent hover:text-accent-foreground h-12 px-8 transition-all hover:scale-105 w-full sm:w-auto"
           >
             Sign In
           </Link>
