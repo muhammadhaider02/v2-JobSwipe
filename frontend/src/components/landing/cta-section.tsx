@@ -8,7 +8,7 @@ const spring = { type: 'spring' as const, damping: 25, stiffness: 120 };
 
 export function CTASection() {
   return (
-    <section className="w-full py-24 md:py-32 relative overflow-hidden">
+    <section className="w-full py-16 md:py-32 relative overflow-hidden">
       <div className="absolute inset-0 dot-grid opacity-50" />
 
       <div className="relative z-10 max-w-3xl mx-auto px-6 text-center">
@@ -37,7 +37,7 @@ export function CTASection() {
         </motion.h2>
 
         <motion.p
-          className="text-lg text-muted-foreground mb-10 max-w-xl mx-auto"
+          className="text-lg text-muted-foreground mb-6 sm:mb-10 max-w-xl mx-auto"
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}

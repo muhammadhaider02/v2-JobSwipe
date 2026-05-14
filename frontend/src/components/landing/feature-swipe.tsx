@@ -63,12 +63,12 @@ export function FeatureSwipe() {
   }, []);
 
   return (
-    <section className="w-full py-24 md:py-32 bg-muted/30 dot-grid">
+    <section className="w-full py-16 md:py-32 bg-muted/30 dot-grid">
       <div className="max-w-6xl mx-auto px-6">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-20 items-center">
           <motion.div
             ref={containerRef}
-            className="relative h-[360px] flex items-center justify-center order-2 lg:order-1"
+            className="relative h-[320px] sm:h-[360px] flex items-center justify-center order-2 lg:order-1 overflow-hidden"
             initial={{ opacity: 0, x: -40 }}
             whileInView={{ opacity: 1, x: 0 }}
             viewport={{ once: true, amount: 0.3 }}

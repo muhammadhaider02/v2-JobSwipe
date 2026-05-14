@@ -11,16 +11,16 @@ export function LandingFooter() {
               &middot; Apply Less, Land More
             </span>
           </div>
-          <div className="flex items-center gap-6 text-sm text-muted-foreground">
+          <div className="flex items-center gap-4 text-sm text-muted-foreground">
             <Link
               href="/auth/sign-up"
-              className="hover:text-foreground transition-colors"
+              className="hover:text-foreground transition-colors py-3"
             >
               Get Started
             </Link>
             <Link
               href="/auth/login"
-              className="hover:text-foreground transition-colors"
+              className="hover:text-foreground transition-colors py-3"
             >
               Sign In
             </Link>

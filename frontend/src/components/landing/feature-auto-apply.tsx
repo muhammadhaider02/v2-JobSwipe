@@ -30,7 +30,7 @@ const spring = { type: 'spring' as const, damping: 25, stiffness: 120 };
 
 export function FeatureAutoApply() {
   return (
-    <section className="w-full py-24 md:py-32">
+    <section className="w-full py-16 md:py-32">
       <div className="max-w-6xl mx-auto px-6">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-20 items-center">
           <motion.div
@@ -79,6 +79,7 @@ export function FeatureAutoApply() {
             viewport={{ once: true, amount: 0.3 }}
             transition={{ ...spring, delay: 0.2 }}
             className="relative"
+            style={{ willChange: 'transform' }}
           >
             <div className="relative bg-card border border-border rounded-2xl p-6 shadow-xl">
               <div className="flex items-center gap-3 mb-6 pb-4 border-b border-border">

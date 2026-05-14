@@ -34,10 +34,10 @@ const spring = { type: 'spring' as const, damping: 25, stiffness: 120 };
 
 export function HowItWorks() {
   return (
-    <section id="how-it-works" className="w-full py-24 md:py-32 dot-grid">
+    <section id="how-it-works" className="w-full py-16 md:py-32 dot-grid">
       <div className="max-w-6xl mx-auto px-6">
         <motion.div
-          className="text-center mb-16 md:mb-20"
+          className="text-center mb-10 md:mb-20"
           initial={{ opacity: 0, y: 30 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, amount: 0.5 }}
