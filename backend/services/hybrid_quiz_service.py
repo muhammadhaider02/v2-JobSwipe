@@ -4,6 +4,7 @@ Tier 1: Taxonomy-Based Database Lookup (exact/fuzzy match via taxonomy)
 Tier 2: Fuzzy Database Matching (legacy fallback)
 Tier 3: Dynamic Enrichment (Google CSE with subskill-enriched queries)
 """
+import hashlib
 import sqlite3
 import random
 import uuid
@@ -42,7 +43,11 @@ class HybridQuizService:
             logger.warning("Could not cache quiz.db tables: %s", e)
             self.available_tables = []
     
-    def generate_quiz(self, skill: str, num_questions: int = 10) -> Quiz:
+    @staticmethod
+    def _question_hash(question_text: str) -> str:
+        return hashlib.md5(question_text.strip().lower().encode()).hexdigest()[:8]
+
+    def generate_quiz(self, skill: str, num_questions: int = 10, exclude_hashes: list[str] | None = None) -> Quiz:
         """
         Generate quiz using enhanced 3-tier hybrid approach with taxonomy.
         
@@ -66,43 +71,43 @@ class HybridQuizService:
         if db_table and match_type in ["exact", "fuzzy"]:
             logger.debug("Taxonomy %s match: '%s' -> '%s' -> '%s'", match_type, skill, canonical_skill, db_table)
             
-            # Try to fetch from database
-            db_questions = self._get_questions_from_table(db_table, num_questions)
-            
+            db_questions, pool_reset = self._get_questions_from_table(db_table, num_questions, exclude_hashes)
+
             if db_questions and len(db_questions) >= num_questions:
                 logger.info("TIER 1 SUCCESS: retrieved %d questions from database", len(db_questions))
-                
+
                 quiz_questions = self._convert_db_to_quiz_questions(db_questions)
-                
+
                 return Quiz(
                     id=str(uuid.uuid4()),
                     skill=skill,
                     questions=quiz_questions,
                     total_points=len(quiz_questions) * 10,
                     source="database_taxonomy",
-                    matched_skill=canonical_skill
+                    matched_skill=canonical_skill,
+                    pool_reset=pool_reset,
                 )
             else:
                 logger.debug("Table '%s' has insufficient questions", db_table)
         else:
             logger.debug("No taxonomy match found")
         
-        # TIER 2: Try legacy fuzzy matching (direct table matching)
         logger.debug("TIER 2: Legacy fuzzy database matching")
-        db_questions, matched_table = self._get_questions_from_db_legacy(skill, num_questions)
-        
+        db_questions, matched_table, pool_reset = self._get_questions_from_db_legacy(skill, num_questions, exclude_hashes)
+
         if db_questions and len(db_questions) >= num_questions:
             logger.info("TIER 2 SUCCESS: retrieved %d questions from '%s'", len(db_questions), matched_table)
-            
+
             quiz_questions = self._convert_db_to_quiz_questions(db_questions)
-            
+
             return Quiz(
                 id=str(uuid.uuid4()),
                 skill=skill,
                 questions=quiz_questions,
                 total_points=len(quiz_questions) * 10,
                 source="database_legacy",
-                matched_skill=matched_table
+                matched_skill=matched_table,
+                pool_reset=pool_reset,
             )
         
         # TIER 3: Dynamic enrichment with taxonomy subskills
@@ -119,129 +124,89 @@ class HybridQuizService:
         
         return quiz
     
-    def _get_questions_from_table(self, table_name: str, num_questions: int) -> List[Dict]:
+    def _get_questions_from_table(
+        self, table_name: str, num_questions: int, exclude_hashes: list[str] | None = None
+    ) -> tuple[list[dict], bool]:
         """
-        Get questions directly from a specific database table.
-        
-        Args:
-            table_name: Name of the table to query
-            num_questions: Number of questions to fetch
-            
+        Get questions from a database table, excluding previously answered ones.
+
         Returns:
-            List of question dicts
+            Tuple of (questions_list, pool_reset_flag)
         """
         try:
             conn = sqlite3.connect(self.QUIZ_DB_PATH)
             cursor = conn.cursor()
-            
-            # Verify table exists and has questions
-            cursor.execute(f"SELECT COUNT(*) FROM '{table_name}'")
-            count = cursor.fetchone()[0]
-            
-            if count == 0:
-                conn.close()
-                return []
-            
-            # Fetch random questions
-            cursor.execute(f"""
-                SELECT question, option_a, option_b, option_c, option_d, answer 
-                FROM '{table_name}' 
-                ORDER BY RANDOM() 
-                LIMIT {num_questions}
-            """)
-            
+
+            cursor.execute(f"SELECT question, option_a, option_b, option_c, option_d, answer FROM '{table_name}'")
             rows = cursor.fetchall()
             conn.close()
-            
-            # Convert to list of dicts
-            questions = []
+
+            if not rows:
+                return [], False
+
+            exclude_set = set(exclude_hashes) if exclude_hashes else set()
+
+            all_questions = []
             for row in rows:
-                questions.append({
-                    'question': row[0],
-                    'option_a': row[1],
-                    'option_b': row[2],
-                    'option_c': row[3],
-                    'option_d': row[4],
-                    'answer': row[5]
-                })
-            
-            return questions
-            
+                q = {
+                    'question': row[0], 'option_a': row[1], 'option_b': row[2],
+                    'option_c': row[3], 'option_d': row[4], 'answer': row[5],
+                    'question_hash': self._question_hash(row[0]),
+                }
+                all_questions.append(q)
+
+            fresh = [q for q in all_questions if q['question_hash'] not in exclude_set]
+
+            pool_reset = False
+            if len(fresh) >= num_questions:
+                selected = random.sample(fresh, num_questions)
+            elif fresh:
+                seen = [q for q in all_questions if q['question_hash'] in exclude_set]
+                pad = random.sample(seen, min(num_questions - len(fresh), len(seen)))
+                selected = fresh + pad
+            else:
+                pool_reset = True
+                logger.info("Question pool exhausted for table '%s', resetting", table_name)
+                selected = random.sample(all_questions, min(num_questions, len(all_questions)))
+
+            return selected, pool_reset
+
         except sqlite3.Error as e:
             logger.error("Database error: %s", e)
-            return []
+            return [], False
         except Exception as e:
             logger.error("Unexpected error: %s", e)
-            return []
+            return [], False
     
-    def _get_questions_from_db_legacy(self, skill: str, num_questions: int) -> Tuple[List[Dict], Optional[str]]:
+    def _get_questions_from_db_legacy(
+        self, skill: str, num_questions: int, exclude_hashes: list[str] | None = None
+    ) -> tuple[list[dict], str | None, bool]:
         """
         LEGACY: Get questions from quiz.db using direct fuzzy matching.
-        This is kept as Tier 2 fallback for skills not in taxonomy.
-        
+
         Returns:
-            Tuple of (questions_list, matched_table_name)
+            Tuple of (questions_list, matched_table_name, pool_reset_flag)
         """
         try:
-            conn = sqlite3.connect(self.QUIZ_DB_PATH)
-            cursor = conn.cursor()
-            
-            # Try exact match
             table_name = self._find_exact_match(skill)
-            
-            # Try fuzzy matching
+
             if not table_name:
                 table_name, similarity = self._find_fuzzy_match(skill)
                 if similarity < 0.6:
                     logger.debug("Fuzzy match similarity too low: %.2f", similarity)
-                    conn.close()
-                    return [], None
+                    return [], None, False
                 else:
                     logger.debug("Legacy fuzzy match: '%s' -> '%s' (similarity: %.2f)", skill, table_name, similarity)
-            
+
             if not table_name:
-                conn.close()
-                return [], None
-            
-            # Verify table exists and has questions
-            cursor.execute(f"SELECT COUNT(*) FROM '{table_name}'")
-            count = cursor.fetchone()[0]
-            
-            if count == 0:
-                conn.close()
-                return [], None
-            
-            # Fetch random questions
-            cursor.execute(f"""
-                SELECT question, option_a, option_b, option_c, option_d, answer 
-                FROM '{table_name}' 
-                ORDER BY RANDOM() 
-                LIMIT {num_questions}
-            """)
-            
-            rows = cursor.fetchall()
-            conn.close()
-            
-            # Convert to list of dicts
-            questions = []
-            for row in rows:
-                questions.append({
-                    'question': row[0],
-                    'option_a': row[1],
-                    'option_b': row[2],
-                    'option_c': row[3],
-                    'option_d': row[4],
-                    'answer': row[5]
-                })
-            
-            return questions, table_name
-            
-        except sqlite3.Error as e:
-            logger.error("Database error: %s", e)
-            return [], None
+                return [], None, False
+
+            questions, pool_reset = self._get_questions_from_table(table_name, num_questions, exclude_hashes)
+            return questions, table_name, pool_reset
+
         except Exception as e:
             logger.error("Unexpected error: %s", e)
-            return [], None
+            return [], None, False
     
     def _find_exact_match(self, skill: str) -> Optional[str]:
         """Find exact table name match (case-insensitive)"""
@@ -311,7 +276,8 @@ class HybridQuizService:
                 ],
                 correct_answer=correct_answer,
                 explanation="Answer from curated question database.",
-                difficulty="medium"
+                difficulty="medium",
+                question_hash=db_q.get('question_hash'),
             )
             quiz_questions.append(question)
         

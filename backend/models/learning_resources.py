@@ -109,7 +109,8 @@ class QuizQuestion:
     correct_answer: Optional[str] = None
     explanation: Optional[str] = None
     difficulty: str = "medium"  # easy, medium, hard
-    
+    question_hash: Optional[str] = None
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary"""
         return asdict(self)
@@ -125,7 +126,8 @@ class Quiz:
     total_points: int = 0
     source: str = "dynamic"  # "database" or "dynamic"
     matched_skill: Optional[str] = None  # For fuzzy matches
-    
+    pool_reset: bool = False
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary"""
         return {
@@ -135,7 +137,8 @@ class Quiz:
             "created_at": self.created_at,
             "total_points": self.total_points,
             "source": self.source,
-            "matched_skill": self.matched_skill
+            "matched_skill": self.matched_skill,
+            "pool_reset": self.pool_reset,
         }
 
 

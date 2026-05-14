@@ -36,6 +36,7 @@ interface QuizQuestion {
   options?: string[];
   explanation?: string;
   difficulty: string;
+  question_hash?: string;
 }
 
 interface Quiz {
@@ -44,6 +45,7 @@ interface Quiz {
   questions: QuizQuestion[];
   created_at: string;
   total_points: number;
+  pool_reset?: boolean;
 }
 
 interface QuizResponse {
@@ -61,6 +63,30 @@ interface QuizEvaluation {
 }
 
 const spring = { type: 'spring' as const, stiffness: 100, damping: 20 };
+
+const ANSWERED_PREFIX = 'quizAnswered:';
+
+function getAnsweredHashes(skill: string): string[] {
+  try {
+    const raw = localStorage.getItem(ANSWERED_PREFIX + skill);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function addAnsweredHashes(skill: string, hashes: string[]) {
+  const merged = [...new Set([...getAnsweredHashes(skill), ...hashes])];
+  try {
+    localStorage.setItem(ANSWERED_PREFIX + skill, JSON.stringify(merged));
+  } catch {}
+}
+
+function clearAnsweredHashes(skill: string) {
+  try {
+    localStorage.removeItem(ANSWERED_PREFIX + skill);
+  } catch {}
+}
 
 function ResultModal({
   evaluation,
@@ -219,11 +245,14 @@ export default function SkillQuizPage() {
   const fetchQuiz = async () => {
     try {
       setLoading(true);
+      const excluded = getAnsweredHashes(skill);
+      const excludeParam = excluded.length ? `&exclude=${excluded.join(',')}` : '';
       const response = await fetch(
-        `/api/skill-quiz/${encodeURIComponent(skill)}`,
+        `/api/skill-quiz/${encodeURIComponent(skill)}?num_questions=5${excludeParam}`,
       );
       if (!response.ok) throw new Error('Failed to fetch quiz');
       const data: QuizResponse = await response.json();
+      if (data.quiz.pool_reset) clearAnsweredHashes(skill);
       setQuiz(data.quiz);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
@@ -265,6 +294,9 @@ export default function SkillQuizPage() {
         passed: data.passed,
         feedback: data.feedback,
       });
+
+      const hashes = quiz.questions.map((q) => q.question_hash).filter(Boolean) as string[];
+      if (hashes.length) addAnsweredHashes(skill, hashes);
     } catch (err) {
       setError(
         err instanceof Error ? err.message : 'Failed to submit quiz',

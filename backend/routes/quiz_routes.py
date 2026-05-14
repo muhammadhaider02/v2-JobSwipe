@@ -56,14 +56,16 @@ def generate_skill_quiz(skill: str):
         return ("", 204)
     
     try:
-        # Get number of questions
         num_questions = int(request.args.get('num_questions', 5))
-        num_questions = min(max(num_questions, 1), 10)  # Clamp between 1-10
-        
-        logger.info("Quiz generation requested for skill=%s, num_questions=%s", skill, num_questions)
-        
-        # Generate quiz using hybrid service
-        quiz = hybrid_service.generate_quiz(skill, num_questions=num_questions)
+        num_questions = min(max(num_questions, 1), 10)
+
+        exclude_param = request.args.get('exclude', '')
+        exclude_hashes = [h.strip() for h in exclude_param.split(',') if h.strip() and len(h.strip()) == 8]
+        exclude_hashes = exclude_hashes[:200]
+
+        logger.info("Quiz generation requested for skill=%s, num_questions=%s, exclude=%d", skill, num_questions, len(exclude_hashes))
+
+        quiz = hybrid_service.generate_quiz(skill, num_questions=num_questions, exclude_hashes=exclude_hashes or None)
         
         # Store quiz in memory for later evaluation
         active_quizzes[quiz.id] = quiz.to_dict()
@@ -177,7 +179,8 @@ def submit_quiz():
                     "score_percentage": float(evaluation['score_percentage']),
                     "quiz_id": quiz_id,
                     "passed": evaluation['passed'],
-                    "timestamp": datetime.utcnow().isoformat()
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "question_hashes": [q.get('question_hash') for q in quiz_data.get('questions', []) if q.get('question_hash')],
                 }
                 
                 supabase_service.client.table('user_quiz_scores').insert(
