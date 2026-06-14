@@ -83,14 +83,15 @@ def load_skill_gap_data(role_name: str) -> List[str]:
     return required_skills
 
 
-def compare_skills_semantic(user_skills: List[str], required_skills: List[str]) -> Dict[str, Any]:
+def compare_skills_semantic(user_skills: List[str], required_skills: List[str], user_embeddings=None) -> Dict[str, Any]:
     """
     Compare user skills with required skills using semantic similarity.
-    
+
     Args:
         user_skills: List of skills the user has
         required_skills: List of skills required for the role
-        
+        user_embeddings: Pre-computed embeddings for user_skills (skips re-encoding if provided)
+
     Returns:
         Dictionary containing:
         - existing_skills: Skills user has that match requirements
@@ -101,7 +102,7 @@ def compare_skills_semantic(user_skills: List[str], required_skills: List[str]) 
         "Comparing skills semantically: user_skills=%d, required_skills=%d, threshold=%.2f",
         len(user_skills), len(required_skills), SIMILARITY_THRESHOLD,
     )
-    
+
     if not user_skills:
         logger.debug("No user skills provided - all required skills are missing")
         return {
@@ -109,7 +110,7 @@ def compare_skills_semantic(user_skills: List[str], required_skills: List[str]) 
             "required_skills": required_skills,
             "skill_matches": []
         }
-    
+
     if not required_skills:
         logger.debug("No required skills found for this role")
         return {
@@ -117,13 +118,13 @@ def compare_skills_semantic(user_skills: List[str], required_skills: List[str]) 
             "required_skills": [],
             "skill_matches": []
         }
-    
+
     model = get_embedding_service()
-    
-    # Compute embeddings
-    logger.debug("Computing embeddings for user skills")
-    user_embeddings = model.encode(user_skills, convert_to_numpy=True, show_progress_bar=False)
-    
+
+    if user_embeddings is None:
+        logger.debug("Computing embeddings for user skills")
+        user_embeddings = model.encode(user_skills, convert_to_numpy=True, show_progress_bar=False)
+
     logger.debug("Computing embeddings for required skills")
     required_embeddings = model.encode(required_skills, convert_to_numpy=True, show_progress_bar=False)
     
@@ -180,24 +181,25 @@ def compare_skills_semantic(user_skills: List[str], required_skills: List[str]) 
     }
 
 
-def analyze_skill_gap(role_name: str, user_skills: List[str]) -> Dict[str, Any]:
+def analyze_skill_gap(role_name: str, user_skills: List[str], user_embeddings=None) -> Dict[str, Any]:
     """
     Main entry point for skill gap analysis.
-    
+
     Args:
         role_name: The role to analyze
         user_skills: List of skills the user currently has
-        
+        user_embeddings: Pre-computed embeddings for user_skills (avoids re-encoding)
+
     Returns:
         Dictionary with skill gap analysis results
     """
     logger.info("Starting skill gap analysis for role=%s", role_name)
-    
+
     # Load required skills for the role
     required_skills = load_skill_gap_data(role_name)
-    
+
     # Compare user skills with required skills
-    comparison_result = compare_skills_semantic(user_skills, required_skills)
+    comparison_result = compare_skills_semantic(user_skills, required_skills, user_embeddings=user_embeddings)
     
     # Add role name to the result
     comparison_result["role"] = role_name

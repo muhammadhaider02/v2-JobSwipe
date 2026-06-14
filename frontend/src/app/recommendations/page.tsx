@@ -377,7 +377,7 @@ function RecommendationsContent() {
         sessionStorage.setItem('userSkills', JSON.stringify(skills));
 
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 30000);
+        const timeoutId = setTimeout(() => controller.abort(), 60000);
 
         try {
           const res = await fetch(`/api/recommend-roles`, {

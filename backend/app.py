@@ -4,6 +4,7 @@ import os
 import re
 import uuid
 import threading
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, List
 from pdfminer.high_level import extract_text
 from docx import Document
@@ -733,42 +734,39 @@ def recommend_roles():
         if max_score == 0:
             max_score = 1.0
 
-        # Process candidates to get actual skill gap percentage
-        processed_recommendations = []
-        
-        # We take the top 20 candidates (from updated_query.py) and analyze their skill gap
-        # This ensures we filter/sort based on the ACTUAL skill match percentage, not just semantic relevance
-        for candidate in candidates:
+        from services.embedding_service import get_embedding_service
+        model = get_embedding_service()
+        user_embeddings = model.encode(skills, convert_to_numpy=True, show_progress_bar=False)
+
+        def process_candidate(candidate):
             role = candidate["role"]
-            
-            # Run skill gap analysis for this role
             try:
-                gap_data = analyze_skill_gap(role, skills)
+                gap_data = analyze_skill_gap(role, skills, user_embeddings=user_embeddings)
                 completion_percentage = gap_data.get("completion_percentage", 0)
-                
-                # Get unique skills from the candidate data
+
                 example_skills = []
                 if candidate.get("example_hits"):
                     for hit in candidate["example_hits"]:
                         example_skills.extend(hit.get("skills", []))
                 unique_skills = list(dict.fromkeys(example_skills))
-                
-                processed_recommendations.append({
+
+                logger.debug("Role: %s, Skill Match: %s%%", role, completion_percentage)
+                return {
                     "role": role,
-                    "score": completion_percentage,  # Use actual skill match percentage
+                    "score": completion_percentage,
                     "skills": ", ".join(unique_skills[:9]),
                     "skillGapData": {
                         "existing_skills": gap_data.get("existing_skills", []),
                         "required_skills": gap_data.get("required_skills", []),
                         "completion_percentage": completion_percentage
                     }
-                })
-                
-                logger.debug("Role: %s, Skill Match: %s%%", role, completion_percentage)
-
+                }
             except Exception as e:
                 logger.error("Error analyzing skill gap for %s: %s", role, e)
-                continue
+                return None
+
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            processed_recommendations = [r for r in executor.map(process_candidate, candidates) if r is not None]
 
         # Filter: only roles with >= 50% skill match
         recommendations = [r for r in processed_recommendations if r["score"] >= 50.0]
