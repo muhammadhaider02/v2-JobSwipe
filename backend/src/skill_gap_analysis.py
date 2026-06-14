@@ -1,44 +1,24 @@
 import os
-
-# --- FORCE DISABLE META TENSOR MODE ---
-os.environ["PYTORCH_DISABLE_META_LOADER"] = "1"
-os.environ["TORCH_LOAD_DIRECT"] = "1"
-os.environ["TOKENIZERS_PARALLELISM"] = "false"
-os.environ["TRANSFORMERS_NO_ADVISORY_WARNINGS"] = "1"
-os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
-
 import pandas as pd
 import numpy as np
-from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 from dotenv import load_dotenv
 from pathlib import Path
 from typing import List, Dict, Any
 from threading import Lock
 from src.logging_config import get_logger
+from services.embedding_service import get_embedding_service
 
 logger = get_logger(__name__)
 
 BASE_DIR = Path(__file__).resolve().parent.parent  # backend/
 load_dotenv(BASE_DIR / ".env.local")
 
-# Set custom cache directory for sentence-transformers models
-SENTENCE_TRANSFORMERS_HOME = os.getenv("SENTENCE_TRANSFORMERS_HOME")
-if SENTENCE_TRANSFORMERS_HOME:
-    os.environ["SENTENCE_TRANSFORMERS_HOME"] = str(BASE_DIR / SENTENCE_TRANSFORMERS_HOME)
-
 SRC_DIR = Path(__file__).resolve().parent  # src/
 EXCEL_SKILL_GAP = str(SRC_DIR / os.getenv("EXCEL_SKILL_GAP"))
 SHEET_SKILL_GAP = os.getenv("SHEET_SKILL_GAP")
-EMBEDDING_MODEL_NAME = os.getenv("EMBEDDING_MODEL_NAME")
-
 # Similarity threshold for matching skills
 SIMILARITY_THRESHOLD = 0.65
-
-# Cache the model to avoid concurrent loading issues
-# Cache the model to avoid concurrent loading issues
-_model_cache = None
-_model_lock = Lock()
 
 # Cache the Excel data to avoid repeated reads
 _excel_cache = None
@@ -103,27 +83,6 @@ def load_skill_gap_data(role_name: str) -> List[str]:
     return required_skills
 
 
-def get_embedding_model():
-    """
-    Safely load the embedding model with thread lock to prevent concurrent loading issues.
-    
-    Returns:
-        SentenceTransformer: The cached or newly loaded embedding model
-    """
-    global _model_cache
-    if _model_cache is not None:
-        logger.debug("Using cached embedding model: %s", EMBEDDING_MODEL_NAME)
-        return _model_cache
-
-    # Prevent concurrent model loads
-    with _model_lock:
-        if _model_cache is None:
-            logger.info("Loading embedding model: %s", EMBEDDING_MODEL_NAME)
-            _model_cache = SentenceTransformer(EMBEDDING_MODEL_NAME)
-
-        return _model_cache
-
-
 def compare_skills_semantic(user_skills: List[str], required_skills: List[str]) -> Dict[str, Any]:
     """
     Compare user skills with required skills using semantic similarity.
@@ -159,8 +118,7 @@ def compare_skills_semantic(user_skills: List[str], required_skills: List[str]) 
             "skill_matches": []
         }
     
-    # Load the embedding model safely
-    model = get_embedding_model()
+    model = get_embedding_service()
     
     # Compute embeddings
     logger.debug("Computing embeddings for user skills")

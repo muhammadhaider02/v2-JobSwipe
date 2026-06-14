@@ -1,5 +1,5 @@
 """
-LLM service with rate limiting for SambaNova API.
+LLM service with rate limiting for DeepSeek API.
 
 Provides JSON-enforced text generation with token bucket rate limiting and retry logic.
 """
@@ -65,16 +65,15 @@ class RateLimiter:
 
 
 class LLMService:
-    """SambaNova LLM client with rate limiting and JSON enforcement."""
+    """DeepSeek LLM client with rate limiting and JSON enforcement."""
     
     def __init__(self):
         """Initialize LLM client."""
         self.settings = get_settings()
         
-        # Initialize OpenAI client (SambaNova-compatible)
         self.client = OpenAI(
-            api_key=self.settings.sambanova_api_key,
-            base_url=self.settings.sambanova_base_url
+            api_key=self.settings.deepseek_api_key,
+            base_url=self.settings.deepseek_base_url
         )
         
         # Initialize rate limiter
@@ -83,7 +82,7 @@ class LLMService:
             cooldown_seconds=self.settings.rate_limit_cooldown_seconds
         )
         
-        logger.info("LLM Service initialized: %s", self.settings.sambanova_model)
+        logger.info("LLM Service initialized: %s", self.settings.deepseek_model)
     
     def generate_json(
         self,
@@ -124,7 +123,7 @@ IMPORTANT:
                 
                 # Make API call
                 response = self.client.chat.completions.create(
-                    model=self.settings.sambanova_model,
+                    model=self.settings.deepseek_model,
                     messages=[
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": prompt}

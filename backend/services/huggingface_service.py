@@ -1,6 +1,6 @@
 """
-HuggingFace Inference API Service
-Handles LLM-based resume optimization using Hugging Face Serverless Inference API
+LLM Resume Optimization Service
+Handles LLM-based resume optimization using DeepSeek API (OpenAI-compatible)
 """
 import os
 import json
@@ -8,39 +8,28 @@ import logging
 import re
 import time
 from typing import Dict, List, Optional, Any
-from huggingface_hub import InferenceClient
+from openai import OpenAI
 
 
 logger = logging.getLogger(__name__)
 
 
 class HuggingFaceService:
-    """Service for interacting with HuggingFace Inference API for resume optimization"""
-    
+    """Service for LLM-based resume optimization using DeepSeek API"""
+
     def __init__(self):
-        """Initialize HuggingFace service with API credentials"""
-        self.api_key = os.getenv("HUGGINGFACE_API_KEY")
-        
-        self.model_id = os.getenv("HF_MODEL_ID", "meta-llama/Llama-3.3-70B-Instruct")
-        
+        self.api_key = os.getenv("DEEPSEEK_API_KEY")
+
+        self.model_id = os.getenv("DEEPSEEK_MODEL", "deepseek-chat")
+
         if not self.api_key:
-            logger.warning("HUGGINGFACE_API_KEY not set. LLM optimization will not work.")
+            logger.warning("DEEPSEEK_API_KEY not set. LLM optimization will not work.")
             self.client = None
         else:
-            # We use SambaNova because it is significantly faster than the default HF fleet
-            # and highly reliable for Llama 3.1 models.
-            self.client = InferenceClient(
-                token=self.api_key,
-                provider="sambanova"
+            self.client = OpenAI(
+                api_key=self.api_key,
+                base_url=os.getenv("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
             )
-        
-        # Generation parameters for deterministic JSON output
-        self.generation_config = {
-            "max_new_tokens": 2048,
-            "temperature": 0.1,
-            "do_sample": False,
-            "top_p": 0.95
-        }
     
     def optimize_experience_bullets(
         self,
@@ -62,30 +51,33 @@ class HuggingFaceService:
             Dictionary with optimized_bullets and reasoning chains
         """
         if not self.client:
-            logger.error("HuggingFace client not initialized")
-            return {"error": "HuggingFace API not configured"}
-        
+            logger.error("LLM client not initialized")
+            return {"error": "DeepSeek API not configured"}
+
         try:
-            prompt = self._build_experience_optimization_prompt(
+            system_prompt, user_prompt = self._build_experience_optimization_prompt(
                 original_bullets,
                 job_description,
                 optimization_rules,
                 job_keywords
             )
-            
-            # Use chat_completion for better control and provider selection
-            messages = [{"role": "user", "content": prompt}]
-            
+
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ]
+
             response = None
             last_error = None
             for attempt in range(1, 4):
                 try:
-                    response = self.client.chat_completion(
-                        messages=messages,
+                    response = self.client.chat.completions.create(
                         model=self.model_id,
+                        messages=messages,
                         max_tokens=2048,
                         temperature=0.1,
-                        top_p=0.95
+                        top_p=0.95,
+                        response_format={"type": "json_object"},
                     )
                     break
                 except Exception as e:
@@ -100,7 +92,7 @@ class HuggingFaceService:
                     if attempt < 3 and is_transient:
                         backoff = attempt
                         logger.warning(
-                            f"Summary optimization transient provider error (attempt {attempt}/3). "
+                            f"Experience optimization transient error (attempt {attempt}/3). "
                             f"Retrying in {backoff}s..."
                         )
                         time.sleep(backoff)
@@ -108,7 +100,7 @@ class HuggingFaceService:
                     raise
 
             if response is None:
-                raise RuntimeError(f"Summary optimization failed after retries: {last_error}")
+                raise RuntimeError(f"Experience optimization failed after retries: {last_error}")
             
             # Extract the message content
             response_text = response.choices[0].message.content
@@ -252,9 +244,9 @@ class HuggingFaceService:
             Dictionary with optimized_skills and reasoning
         """
         if not self.client:
-            logger.error("HuggingFace client not initialized")
-            return {"error": "HuggingFace API not configured"}
-        
+            logger.error("LLM client not initialized")
+            return {"error": "DeepSeek API not configured"}
+
         try:
             prompt = self._build_skills_optimization_prompt(
                 original_skills,
@@ -262,16 +254,16 @@ class HuggingFaceService:
                 job_keywords,
                 optimization_rules
             )
-            
-            # Use chat_completion for better control and provider selection
+
             messages = [{"role": "user", "content": prompt}]
-            
-            response = self.client.chat_completion(
-                messages=messages,
+
+            response = self.client.chat.completions.create(
                 model=self.model_id,
+                messages=messages,
                 max_tokens=2048,
                 temperature=0.1,
-                top_p=0.95
+                top_p=0.95,
+                response_format={"type": "json_object"},
             )
             
             # Extract the message content
@@ -319,9 +311,9 @@ class HuggingFaceService:
             Dictionary with optimized_summary and reasoning
         """
         if not self.client:
-            logger.error("HuggingFace client not initialized")
-            return {"error": "HuggingFace API not configured"}
-        
+            logger.error("LLM client not initialized")
+            return {"error": "DeepSeek API not configured"}
+
         try:
             prompt = self._build_summary_optimization_prompt(
                 original_summary,
@@ -331,16 +323,16 @@ class HuggingFaceService:
                 optimization_rules,
                 job_keywords
             )
-            
-            # Use chat_completion for better control and provider selection
+
             messages = [{"role": "user", "content": prompt}]
-            
-            response = self.client.chat_completion(
-                messages=messages,
+
+            response = self.client.chat.completions.create(
                 model=self.model_id,
+                messages=messages,
                 max_tokens=2048,
                 temperature=0.1,
-                top_p=0.95
+                top_p=0.95,
+                response_format={"type": "json_object"},
             )
             
             # Extract the message content
@@ -398,27 +390,25 @@ class HuggingFaceService:
         job_description: str,
         optimization_rules: List[str],
         job_keywords: List[str]
-    ) -> str:
-        """Build prompt for experience bullet optimization"""
-        
+    ) -> tuple:
+        """Build prompt for experience bullet optimization. Returns (system_prompt, user_prompt)."""
+
         rules_text = "\n".join([f"- {rule}" for rule in optimization_rules])
         keywords_text = ", ".join([kw['skill'] if isinstance(kw, dict) else kw for kw in job_keywords[:15]])
         bullets_text = "\n".join([f"{i+1}. {bullet}" for i, bullet in enumerate(original_bullets)])
-        
-        # Added a strict JSON instruction at the end of the system block for Llama-3.1
-        prompt = f"""<|begin_of_text|><|start_header_id|>system<|end_header_id|>
-You are an expert resume optimizer. Your task is to rewrite resume experience bullet points to better match a specific job description while maintaining complete factual accuracy.
+
+        system_prompt = f"""You are an expert resume optimizer. Your task is to rewrite resume experience bullet points to better match a specific job description while maintaining complete factual accuracy.
 
 CRITICAL RULES (FOLLOW EXACTLY OR OUTPUT WILL BE REJECTED):
 1. FACTUAL ACCURACY: DO NOT add achievements, projects, metrics, or dates not in the original bullets.
 2. PRESERVE MEANING: Keep the core meaning and key details of the original. Only improve word choice.
-3. CONCISENESS IS MANDATORY: 
+3. CONCISENESS IS MANDATORY:
    - Maximum 30% length increase (e.g., 10 chars → max 13 chars, 20 chars → max 26 chars)
    - If you cannot improve within this limit, return the EXACT original wording
    - Examples:
-     ✅ "Fixed bugs" → "Resolved bugs" (10→13 chars = 30% ✓)
-     ❌ "Fixed bugs" → "Identified and resolved critical bugs" (10→37 chars = 270% ✗)
-     ✅ "Built features for product" → "Built core product features" (26→27 chars ✓)
+     "Fixed bugs" → "Resolved bugs" (10→13 chars = 30% OK)
+     "Fixed bugs" → "Identified and resolved critical bugs" (10→37 chars = 270% TOO LONG)
+     "Built features for product" → "Built core product features" (26→27 chars OK)
 4. MINIMAL CHANGES: Change 1-2 words maximum. Stronger verb + remove filler words ('the', 'and', 'very').
 5. NO METRICS NEEDED: Don't add [brackets] or metrics - system handles that automatically.
 6. JSON ONLY: Return ONLY valid JSON.
@@ -429,9 +419,9 @@ TARGET JOB DESCRIPTION:
 KEY KEYWORDS: {keywords_text}
 
 OPTIMIZATION RULES:
-{rules_text}
-<|eot_id|><|start_header_id|>user<|end_header_id|>
-ORIGINAL RESUME BULLETS:
+{rules_text}"""
+
+        user_prompt = f"""ORIGINAL RESUME BULLETS:
 {bullets_text}
 
 YOUR TASK:
@@ -452,14 +442,12 @@ OUTPUT FORMAT (strict JSON - must include ALL {len(original_bullets)} bullets):
       "optimized": "improved second bullet",
       "reasoning": "explanation of changes"
     }}
-    // ... continue for all {len(original_bullets)} bullets
   ]
 }}
 
-Remember: Return ONLY the JSON object above with ALL {len(original_bullets)} bullets in the array.
-<|eot_id|><|start_header_id|>assistant<|end_header_id|>"""
-        
-        return prompt
+Remember: Return ONLY the JSON object above with ALL {len(original_bullets)} bullets in the array."""
+
+        return system_prompt, user_prompt
     
     def _build_skills_optimization_prompt(
         self,

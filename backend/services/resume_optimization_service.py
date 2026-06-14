@@ -12,7 +12,7 @@ from typing import List, Dict, Any, Optional
 from pathlib import Path
 import faiss
 import numpy as np
-from sentence_transformers import SentenceTransformer
+from services.embedding_service import get_embedding_service
 
 try:
     from models.skill_extractor import SkillExtractor
@@ -77,10 +77,6 @@ class ResumeOptimizationService:
         self.knowledge_metadata = None
         self._load_knowledge_base()
         
-        # Load sentence transformer (same as job embeddings)
-        self.model = None
-        self._load_embedding_model()
-        
         # Initialize skill extractor for JD analysis (optional)
         if SKILL_EXTRACTOR_AVAILABLE:
             self.skill_extractor = SkillExtractor()
@@ -92,26 +88,6 @@ class ResumeOptimizationService:
         # Get HuggingFace service
         self.hf_service = get_huggingface_service()
 
-    def _load_embedding_model(self) -> None:
-        """Best-effort model load with safe fallbacks to keep API responsive."""
-        candidates = [
-            "sentence-transformers/all-MiniLM-L6-v2",
-            "all-MiniLM-L6-v2",
-        ]
-
-        logger.info("Loading SentenceTransformer model (this may take 10-30 seconds)...")
-        for model_name in candidates:
-            try:
-                self.model = SentenceTransformer(model_name, device="cpu")
-                logger.info("SentenceTransformer model loaded: %s", model_name)
-                return
-            except Exception as exc:
-                logger.warning(f"Model load failed for {model_name}: {exc}")
-
-        # Keep service alive even if embeddings are unavailable.
-        self.model = None
-        logger.warning("Embedding model unavailable. Falling back to lexical scoring only.")
-    
     def _load_knowledge_base(self):
         """Load FAISS index and metadata for RAG retrieval"""
         faiss_path = self.models_dir / "resume_rules_faiss.index"
@@ -280,13 +256,17 @@ class ResumeOptimizationService:
             # For better performance, could rebuild filtered index on-the-fly
             
             # If embedding model is unavailable, use deterministic metadata-filtered fallback.
-            if self.model is None:
+            try:
+                model = get_embedding_service()
+            except Exception:
+                model = None
+            if model is None:
                 rules = [chunk.get('chunk_text', '') for chunk in filtered_chunks[:top_k] if chunk.get('chunk_text')]
                 logger.info(f"Retrieved {len(rules)} optimization rules (fallback mode)")
                 return rules
 
             # Embed the query
-            query_embedding = self.model.encode([query], convert_to_numpy=True, show_progress_bar=False)
+            query_embedding = model.encode([query], convert_to_numpy=True, show_progress_bar=False)
             faiss.normalize_L2(query_embedding)
 
             # Search in full index, then filter results
@@ -651,13 +631,12 @@ class ResumeOptimizationService:
         return float(score), missing
 
     def _semantic_similarity_score(self, optimized_text: str, job_description: str) -> float:
-        """Compute semantic similarity using the existing embedding model."""
+        """Compute semantic similarity using the embedding service."""
         if not optimized_text.strip() or not job_description.strip():
             return 0.0
-        if self.model is None:
-            return 0.0
         try:
-            embeddings = self.model.encode([optimized_text, job_description], normalize_embeddings=True, show_progress_bar=False)
+            model = get_embedding_service()
+            embeddings = model.encode([optimized_text, job_description], normalize_embeddings=True, show_progress_bar=False)
             similarity = float(np.dot(embeddings[0], embeddings[1]))
             return max(0.0, min(1.0, similarity))
         except Exception as exc:

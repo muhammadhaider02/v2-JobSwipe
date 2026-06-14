@@ -4,6 +4,7 @@ WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
+    curl \
     texlive \
     texlive-latex-extra \
     texlive-plain-generic \
@@ -16,8 +17,10 @@ RUN uv sync --frozen --no-dev
 
 COPY . .
 
-# Pre-download the sentence-transformers model so startup is instant
-RUN uv run python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"
+# Download ONNX embedding model (replaces PyTorch-based sentence-transformers)
+RUN mkdir -p models/onnx && \
+    curl -L -o models/onnx/model.onnx "https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/onnx/model.onnx" && \
+    curl -L -o models/onnx/tokenizer.json "https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2/resolve/main/tokenizer.json"
 
 EXPOSE 5000
 

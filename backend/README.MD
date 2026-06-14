@@ -7,7 +7,7 @@
 [![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)](https://python.org)
 [![Flask](https://img.shields.io/badge/Flask-3.1-000000?logo=flask&logoColor=white)](https://flask.palletsprojects.com)
 [![LangGraph](https://img.shields.io/badge/LangGraph-0.2-1C3C3C)](https://langchain-ai.github.io/langgraph)
-[![SambaNova](https://img.shields.io/badge/SambaNova-Llama_3.3_70B-FF6D00)](https://sambanova.ai)
+[![DeepSeek](https://img.shields.io/badge/DeepSeek-Chat-4D6BFF)](https://deepseek.com)
 [![Supabase](https://img.shields.io/badge/Supabase-Database-3FCF8E?logo=supabase&logoColor=white)](https://supabase.com)
 [![FAISS](https://img.shields.io/badge/FAISS-Vector_Search-4285F4?logo=meta&logoColor=white)](https://github.com/facebookresearch/faiss)
 
@@ -34,11 +34,7 @@ Upload a resume, get AI-matched jobs, receive tailored application materials and
 
 The backend is a Flask API backed by a LangGraph multi-agent system. It hosts three of the four JobSwipe agents. The fourth, the Scraper Agent, is [deployed separately](https://github.com/muhammadhaider02/Scrapling-Job-Boards-Scrapper) and feeds job data into the shared Supabase database.
 
-When a user uploads a resume, the Llama 3.3 70B model (via SambaNova) extracts structured data: education, experience, skills and projects. A FAISS index with sentence-transformer embeddings powers role recommendation and skill gap analysis.
-
 The **Matching Agent** (Vetting Officer node) scores every job across five weighted factors: skill match, query relevance, experience alignment, location fit and title similarity. The **Optimization Agent** (Campaign Manager node) generates a tailored resume via RAG (rendered to PDF with LaTeX) and a personalized cover letter. The **Application Agent** auto-applies on the user's behalf after human-in-the-loop approval, handling form filling and submission through a managed browser session.
-
-All LLM calls route through SambaNova's inference API for fast token generation.
 
 ---
 
@@ -54,14 +50,14 @@ All LLM calls route through SambaNova's inference API for fast token generation.
                            ▼
 ┌─────────────────────────────────────────────────────────┐
 │  Resume Upload (PDF or DOCX)                            │
-│  Llama 3.3 70B extracts education, experience,          │
+│  DeepSeek extracts education, experience,               │
 │  skills and projects into structured JSON               │
 └──────────────────────────┬──────────────────────────────┘
                            │
                            ▼
 ┌─────────────────────────────────────────────────────────┐
-│  Role Recommendation (FAISS + Sentence Transformers)    │
-│  Resume embedded via all-MiniLM-L6-v2                   │
+│  Role Recommendation (FAISS + ONNX Embeddings)          │
+│  Resume embedded via all-MiniLM-L6-v2 (ONNX Runtime)    │
 │  Cosine similarity search against role embeddings       │
 └──────────────────────────┬──────────────────────────────┘
                            │
@@ -100,8 +96,8 @@ All LLM calls route through SambaNova's inference API for fast token generation.
 
 | Feature | Description |
 |:---|:---|
-| **Resume Parsing** | Llama 3.3 70B extracts structured education, experience, skills and projects from PDF/DOCX |
-| **Role Recommendation** | FAISS vector search with sentence-transformer embeddings matches resumes to 20 career roles |
+| **Resume Parsing** | DeepSeek extracts structured education, experience, skills and projects from PDF/DOCX |
+| **Role Recommendation** | FAISS vector search with ONNX embeddings matches resumes to 20 career roles |
 | **Matching Agent** | Scores jobs across 5 weighted factors (skill match, query relevance, experience, location, title similarity) with configurable thresholds |
 | **Optimization Agent** | RAG-enhanced resume tailoring with LaTeX PDF generation and personalized cover letter |
 | **Application Agent** | Auto-applies to jobs after human-in-the-loop approval via managed browser session |
@@ -120,8 +116,8 @@ All LLM calls route through SambaNova's inference API for fast token generation.
 |:---|:---|
 | Framework | Flask 3.1, Gunicorn |
 | Multi-Agent | LangGraph 0.2, LangChain Core 0.3 |
-| LLM | Llama 3.3 70B via SambaNova API |
-| Embeddings | Sentence Transformers (all-MiniLM-L6-v2) |
+| LLM | DeepSeek API (OpenAI-compatible) |
+| Embeddings | ONNX Runtime (all-MiniLM-L6-v2, 384-dim) |
 | Vector Search | FAISS (faiss-cpu) |
 | Database | Supabase (PostgreSQL) |
 | Resume PDF | LaTeX (texlive) |
@@ -137,7 +133,7 @@ All LLM calls route through SambaNova's inference API for fast token generation.
 - uv (Astral package manager)
 - Redis server
 - Supabase project
-- SambaNova API key
+- DeepSeek API key
 - Google API key + Custom Search Engine ID (for learning resources)
 - YouTube API key
 
@@ -179,13 +175,10 @@ cp .env.example .env.local
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 
-# SambaNova LLM
-SAMBANOVA_API_KEY=your-sambanova-api-key
-SAMBANOVA_BASE_URL=https://api.sambanova.ai/v1
-SAMBANOVA_MODEL=gemma-3-12b-it
-
-# HuggingFace (resume optimization)
-HUGGINGFACE_API_KEY=your-huggingface-api-key
+# DeepSeek LLM
+DEEPSEEK_API_KEY=your-deepseek-api-key
+DEEPSEEK_BASE_URL=https://api.deepseek.com
+DEEPSEEK_MODEL=deepseek-chat
 
 # Google APIs (learning resources)
 YOUTUBE_API_KEY=your-youtube-api-key
@@ -194,9 +187,6 @@ GOOGLE_SEARCH_ENGINE_ID=your-search-engine-id
 
 # CORS - set to your frontend domain in production
 CORS_ALLOWED_ORIGIN=http://localhost:3000
-
-# Sentence Transformers model cache location
-SENTENCE_TRANSFORMERS_HOME=models/sentence_transformers
 ```
 
 ---
@@ -211,4 +201,4 @@ docker build -t jobswipe-backend .
 docker run -p 5000:5000 --env-file .env.local jobswipe-backend
 ```
 
-The Docker image pre-downloads the sentence-transformers model at build time for instant startup.
+The Docker image downloads the ONNX embedding model at build time for instant startup.

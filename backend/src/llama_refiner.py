@@ -425,8 +425,8 @@ class LlamaRefiner:
 
         headers = {
             "Content-Type": "application/json",
-            # Use SambaNova key if set, otherwise fall back to OPENAI_API_KEY
-            "Authorization": f"Bearer {os.environ.get('SAMBANOVA_API_KEY') or os.environ.get('OPENAI_API_KEY', 'sk-no-key')}",
+            # Use DeepSeek key if set, otherwise fall back to OPENAI_API_KEY
+            "Authorization": f"Bearer {os.environ.get('DEEPSEEK_API_KEY') or os.environ.get('OPENAI_API_KEY', 'sk-no-key')}",
         }
 
         payload: Dict[str, Any] = {
@@ -665,7 +665,7 @@ def refine_projects(
     if not projects_text or not projects_text.strip():
         return []
 
-    # Cap input to avoid exceeding SambaNova's context/response_format limits.
+    # Cap input to avoid exceeding context/response_format limits.
     # 4000 chars covers ~10-15 projects comfortably.
     PROJECTS_CHAR_LIMIT = 4000
     if len(projects_text) > PROJECTS_CHAR_LIMIT:

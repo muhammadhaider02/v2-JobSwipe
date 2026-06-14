@@ -1,12 +1,12 @@
 import os
 import pickle
 import numpy as np
-from sentence_transformers import SentenceTransformer
 from sklearn.preprocessing import normalize
 import faiss
 from dotenv import load_dotenv
 from pathlib import Path
 from src.logging_config import get_logger
+from services.embedding_service import get_embedding_service
 
 logger = get_logger(__name__)
 
@@ -16,8 +16,6 @@ load_dotenv(BASE_DIR / ".env.local")
 SRC_DIR = Path(__file__).resolve().parent  # src/
 FAISS_INDEX_PATH = str(SRC_DIR / os.getenv("FAISS_INDEX_PATH"))
 METADATA_PATH = str(SRC_DIR / os.getenv("METADATA_PATH"))
-
-EMBEDDING_MODEL_NAME = os.getenv("EMBEDDING_MODEL_NAME")
 
 ROLES = [
     "Software Engineer", "Full Stack Developer", "Frontend Developer", "Backend Developer",
@@ -38,7 +36,7 @@ def load_index_and_metadata(idx_path, meta_path):
 
 
 def query_index(index, metadata, query, top_k=10):
-    model = SentenceTransformer(EMBEDDING_MODEL_NAME)
+    model = get_embedding_service()
     q_emb = model.encode([query], convert_to_numpy=True, show_progress_bar=False)
     q_emb = normalize(q_emb, norm="l2", axis=1).astype(np.float32)
     D, I = index.search(q_emb, top_k)

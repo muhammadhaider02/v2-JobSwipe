@@ -2,12 +2,12 @@ import os
 import pandas as pd
 import numpy as np
 import re
-from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 from dotenv import load_dotenv
 from pathlib import Path
 from typing import List, Set
 from src.logging_config import get_logger
+from services.embedding_service import get_embedding_service
 
 logger = get_logger(__name__)
 
@@ -17,13 +17,8 @@ load_dotenv(BASE_DIR / ".env.local")
 SRC_DIR = Path(__file__).resolve().parent  # src/
 EXCEL_SKILL_GAP = str(SRC_DIR / os.getenv("EXCEL_SKILL_GAP"))
 SHEET_SKILL_GAP = os.getenv("SHEET_SKILL_GAP")
-EMBEDDING_MODEL_NAME = os.getenv("EMBEDDING_MODEL_NAME")
-
 # Similarity threshold for matching skills
 SIMILARITY_THRESHOLD = 0.65
-
-# Cache the model to avoid concurrent loading issues
-_model_cache = None
 
 
 def load_all_unique_skills() -> List[str]:
@@ -93,8 +88,6 @@ def enrich_skills(resume_text: str, existing_skills: List[str]) -> List[str]:
     Returns:
         Enriched list of skills (existing + auto-detected)
     """
-    global _model_cache
-    
     logger.info("Skill enrichment started")
     logger.debug("Existing skills count: %d", len(existing_skills))
     
@@ -142,15 +135,7 @@ def enrich_skills(resume_text: str, existing_skills: List[str]) -> List[str]:
     if unmatched_skills:
         logger.debug("Pass 2: semantic matching fallback (%d unmatched skills)", len(unmatched_skills))
         
-        # Load or use cached embedding model
-        if _model_cache is None:
-            logger.info("Loading embedding model: %s", EMBEDDING_MODEL_NAME)
-            _model_cache = SentenceTransformer(EMBEDDING_MODEL_NAME, device="cpu")
-            logger.info("Model loaded successfully")
-        else:
-            logger.debug("Using cached embedding model: %s", EMBEDDING_MODEL_NAME)
-        
-        model = _model_cache
+        model = get_embedding_service()
         
         # Split resume into sentences for better semantic matching
         sentences = [s.strip() for s in resume_text.split('.') if s.strip()]

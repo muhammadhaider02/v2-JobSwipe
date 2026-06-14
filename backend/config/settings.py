@@ -35,10 +35,10 @@ class Settings(BaseSettings):
     supabase_service_role_key: str = Field(default="", description="Supabase service role key")
     supabase_anon_key: str = Field(default="", description="Supabase anonymous key")
     
-    # SambaNova LLM Configuration
-    sambanova_api_key: str = Field(default="", description="SambaNova API key")
-    sambanova_base_url: str = Field(default="https://api.sambanova.ai/v1", description="SambaNova API base URL")
-    sambanova_model: str = Field(default="gemma-3-12b-it", description="LLM model name")
+    # DeepSeek LLM Configuration
+    deepseek_api_key: str = Field(default="", description="DeepSeek API key")
+    deepseek_base_url: str = Field(default="https://api.deepseek.com", description="DeepSeek API base URL")
+    deepseek_model: str = Field(default="deepseek-chat", description="DeepSeek model name")
     
     # Rate Limiting
     rate_limit_calls_per_minute: int = Field(default=15, description="Max LLM calls per minute")
@@ -100,8 +100,8 @@ class Settings(BaseSettings):
             missing.append("SUPABASE_URL")
         if not self.supabase_service_role_key:
             missing.append("SUPABASE_SERVICE_ROLE_KEY")
-        if not self.sambanova_api_key:
-            missing.append("SAMBANOVA_API_KEY")
+        if not self.deepseek_api_key:
+            missing.append("DEEPSEEK_API_KEY")
             
         return missing
 

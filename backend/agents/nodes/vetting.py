@@ -12,11 +12,11 @@ Scores and filters jobs based on:
 import re
 import numpy as np
 from typing import Dict, Any, List, Optional, Tuple
-from sentence_transformers import SentenceTransformer
 from agents.state import AgentState, VettedJob
 from services import get_supabase_service
 from langchain_core.messages import AIMessage
 from src.logging_config import get_logger, redact_uid
+from services.embedding_service import get_embedding_service
 
 logger = get_logger(__name__)
 
@@ -54,17 +54,6 @@ SENIORITY_KEYWORDS = {
     "lead": ["lead", "principal", "architect", "director", "head", "manager"]
 }
 
-# Cache for embedding model (load once)
-_model_cache = None
-
-
-def get_embedding_model() -> SentenceTransformer:
-    """Get or initialize cached SentenceTransformer model."""
-    global _model_cache
-    if _model_cache is None:
-        logger.info("Loading SentenceTransformer model (all-MiniLM-L6-v2)...")
-        _model_cache = SentenceTransformer("all-MiniLM-L6-v2")
-    return _model_cache
 
 
 def fetch_user_profile(user_id: str) -> Optional[Dict[str, Any]]:
@@ -142,7 +131,7 @@ def calculate_query_match(search_query: str, job_title: str) -> float:
     if not search_query or not job_title:
         return 0.0
     try:
-        model = get_embedding_model()
+        model = get_embedding_service()
         embeddings = model.encode([search_query, job_title], normalize_embeddings=True, show_progress_bar=False)
         similarity = float(embeddings[0] @ embeddings[1])
         # Clamp to [0, 1]
@@ -156,7 +145,7 @@ def calculate_title_similarity(user_titles: List[str], job_title: str) -> float:
     """
     Calculate semantic similarity between user's previous titles and job title.
     
-    Uses SentenceTransformer embeddings and cosine similarity. Returns max 
+    Uses embedding model and cosine similarity. Returns max
     similarity across all user titles.
     
     Args:
@@ -170,7 +159,7 @@ def calculate_title_similarity(user_titles: List[str], job_title: str) -> float:
         return 0.0
     
     try:
-        model = get_embedding_model()
+        model = get_embedding_service()
         
         # Batch encode all titles at once (efficient)
         all_titles = user_titles + [job_title]
@@ -201,7 +190,7 @@ def calculate_skill_match(user_skills: List[str], job_skills: List[str]) -> Tupl
     """
     Calculate skill match using semantic similarity.
     
-    Uses SentenceTransformer with 0.65 similarity threshold for matching.
+    Uses embedding model with 0.65 similarity threshold for matching.
     Returns both score and lists of matching/missing skills.
     
     Args:
@@ -218,7 +207,7 @@ def calculate_skill_match(user_skills: List[str], job_skills: List[str]) -> Tupl
         return 0.0, [], job_skills  # No skills = no match
     
     try:
-        model = get_embedding_model()
+        model = get_embedding_service()
         
         # Encode all skills
         user_embeddings = model.encode(user_skills, normalize_embeddings=True, show_progress_bar=False)

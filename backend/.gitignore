@@ -37,8 +37,8 @@ tmp/
 .coverage
 htmlcov/
 
-# ML model cache (too large for git — downloaded at Docker build time)
-sentence_transformers/
+# ONNX model
+models/onnx/
 
 # Agent temp files
 screenshots/

@@ -571,8 +571,8 @@ def upload_resume():
             )
 
             backend = os.getenv("LLAMA_BACKEND", "openai_compat")
-            model_name = get_settings().sambanova_model
-            base_url = get_settings().sambanova_base_url
+            model_name = get_settings().deepseek_model
+            base_url = get_settings().deepseek_base_url
 
             logger.debug("LLM config: backend=%s model=%s base_url=%s",
                          backend, model_name, base_url)
@@ -607,8 +607,8 @@ def upload_resume():
             logger.info("Starting projects LLM for job=%s", job_id)
             projects_text = sections.get("Projects", "")
             backend = os.getenv("LLAMA_BACKEND", "openai_compat")
-            model_name = get_settings().sambanova_model
-            base_url = get_settings().sambanova_base_url
+            model_name = get_settings().deepseek_model
+            base_url = get_settings().deepseek_base_url
 
             extracted_projects = refine_projects(
                 projects_text=projects_text,
